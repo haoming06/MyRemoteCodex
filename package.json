@@ -1,0 +1,39 @@
+{
+  "name": "my-remote-codex",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "npm run typecheck && npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:native:macos": "./scripts/build-native-macos.sh",
+    "build:macos:installer": "./scripts/build-macos-installer.sh",
+    "build:macos:installers": "./scripts/build-macos-installers.sh",
+    "dev": "concurrently -k \"vite build --watch\" \"tsx watch src/server.ts\"",
+    "start": "node dist/server/server.js",
+    "serve": "tsx src/server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify:live-input": "tsx scripts/verify-live-input.ts",
+    "typecheck": "tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.server.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "werift": "^0.24.4",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.5",
+    "lucide": "^1.33.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

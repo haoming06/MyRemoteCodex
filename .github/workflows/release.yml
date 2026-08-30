@@ -1,0 +1,103 @@
+name: Release macOS DMGs
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub Release tag to build and update
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.display_name }} DMG
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: arm64
+            display_name: Apple Silicon
+            runner: macos-15
+          - architecture: x86_64
+            display_name: Intel
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.release.tag_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set release version
+        shell: bash
+        run: |
+          npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build unsigned DMG
+        shell: bash
+        env:
+          CODESIGN_IDENTITY: "-"
+          TARGET_ARCH: ${{ matrix.architecture }}
+        run: npm run build:macos:installer
+
+      - name: Verify release asset
+        shell: bash
+        env:
+          TARGET_ARCH: ${{ matrix.architecture }}
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          dmg_name="My-Remote-Codex-${version}-${TARGET_ARCH}.dmg"
+          dmg_path="dist/installers/$dmg_name"
+
+          test -f "$dmg_path"
+          hdiutil imageinfo "$dmg_path" >/dev/null
+          shasum -a 256 "$dmg_path" | sed "s#  .*#  $dmg_name#" > "$dmg_path.sha256"
+
+      - name: Collect release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.architecture }}
+          path: |
+            dist/installers/*.dmg
+            dist/installers/*.dmg.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Attach DMGs to release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download DMGs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        run: gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"

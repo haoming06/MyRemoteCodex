@@ -1,0 +1,190 @@
+export type Language = "zh-CN" | "en";
+
+export const languageStorageKey = "remote-codex-language";
+
+const chinese = {
+  connectComputer: "连接这台电脑",
+  pairingCode: "配对码",
+  recentPairingCodes: "最近使用",
+  useSavedPairingCode: "使用配对码 {code}",
+  deleteSavedPairingCode: "删除配对码 {code}",
+  connect: "连接",
+  displayControls: "画面控制",
+  displayQuality: "画面清晰度",
+  normalQuality: "普通",
+  highQuality: "高清",
+  switchTouchMode: "切换触摸模式",
+  fitWindow: "适合窗口",
+  resetZoom: "重置缩放",
+  fullscreen: "全屏",
+  disconnectDevice: "断开设备",
+  remoteDisplay: "Codex 远程画面",
+  remoteKeyboardInput: "远程键盘输入",
+  waitingForCodex: "等待 Codex",
+  findingWindow: "正在查找本机渲染窗口",
+  browse: "浏览",
+  directTouch: "直接触控",
+  browseMode: "浏览模式",
+  petRunTitle: "点击让它跑一圈",
+  terminals: "个终端",
+  sendToCodex: "向 Codex 发送内容",
+  clearComposer: "清空输入内容",
+  send: "发送",
+  sending: "发送中",
+  sent: "已发送",
+  sendFailed: "消息发送失败",
+  takingControlAndSending: "正在接管控制权并发送",
+  connectionLostBeforeSend: "连接已断开，消息尚未发送",
+  connecting: "正在连接",
+  reconnecting: "正在重连",
+  connected: "已连接",
+  viewOnly: "仅查看",
+  backgroundRefresh: "后台刷新",
+  backgroundView: "后台查看",
+  codexDisconnected: "Codex 未连接",
+  displayConnecting: "画面连接中",
+  waitingForFirstFrame: "正在等待第一帧",
+  startCodexWithDebugPort: "请用调试端口启动 Codex",
+  invalidFrameData: "画面数据无效",
+  frameDecodeFailed: "画面解码失败",
+  localServiceUnavailable: "无法连接本机服务",
+  connectionFailed: "连接失败",
+  browserWebRtcFailed: "浏览器无法启动 WebRTC",
+  nativeCaptureUnavailable: "H.264 原生采集程序不可用",
+  webRtcConnectionFailed: "WebRTC 视频连接失败",
+  still: "静止",
+  waitingForScreenPermission: "待屏幕录制授权",
+  captureNotStarted: "采集器未启动",
+  webRtcFallback: "WebRTC 回退",
+  jpegFallbackDetail: "JPEG 回退：{detail}",
+  decodeStats: "解码 {ms} ms · 已丢弃过期帧 {dropped}",
+  petRunning: "出去转转",
+  petConnecting: "正在连接",
+  petOffline: "连接休眠",
+  petControlling: "正在守护",
+  petObserving: "安静旁观",
+  petAccessibility: "{count} 个终端已连接，{status}",
+  switchToEnglish: "Switch to English",
+  switchToChinese: "切换到中文",
+} as const;
+
+export type TranslationKey = keyof typeof chinese;
+
+const english: Record<TranslationKey, string> = {
+  connectComputer: "Connect to this computer",
+  pairingCode: "Pairing code",
+  recentPairingCodes: "Recently used",
+  useSavedPairingCode: "Use pairing code {code}",
+  deleteSavedPairingCode: "Delete pairing code {code}",
+  connect: "Connect",
+  displayControls: "Display controls",
+  displayQuality: "Display quality",
+  normalQuality: "Standard",
+  highQuality: "High",
+  switchTouchMode: "Switch touch mode",
+  fitWindow: "Fit to window",
+  resetZoom: "Reset zoom",
+  fullscreen: "Full screen",
+  disconnectDevice: "Disconnect device",
+  remoteDisplay: "Codex remote display",
+  remoteKeyboardInput: "Remote keyboard input",
+  waitingForCodex: "Waiting for Codex",
+  findingWindow: "Looking for the local renderer window",
+  browse: "Browse",
+  directTouch: "Direct touch",
+  browseMode: "Browse mode",
+  petRunTitle: "Click to send it for a run",
+  terminals: " terminals",
+  sendToCodex: "Send a message to Codex",
+  clearComposer: "Clear message",
+  send: "Send",
+  sending: "Sending",
+  sent: "Sent",
+  sendFailed: "Message could not be sent",
+  takingControlAndSending: "Taking control and sending",
+  connectionLostBeforeSend: "Connection lost; the message was not sent",
+  connecting: "Connecting",
+  reconnecting: "Reconnecting",
+  connected: "Connected",
+  viewOnly: "View only",
+  backgroundRefresh: "Background refresh",
+  backgroundView: "Background view",
+  codexDisconnected: "Codex disconnected",
+  displayConnecting: "Connecting display",
+  waitingForFirstFrame: "Waiting for the first frame",
+  startCodexWithDebugPort: "Start Codex with the debugging port enabled",
+  invalidFrameData: "Invalid display data",
+  frameDecodeFailed: "Could not decode the display",
+  localServiceUnavailable: "Could not connect to the local service",
+  connectionFailed: "Connection failed",
+  browserWebRtcFailed: "The browser could not start WebRTC",
+  nativeCaptureUnavailable: "Native H.264 capture is unavailable",
+  webRtcConnectionFailed: "WebRTC video connection failed",
+  still: "Idle",
+  waitingForScreenPermission: "Waiting for screen recording permission",
+  captureNotStarted: "Capture not started",
+  webRtcFallback: "WebRTC fallback",
+  jpegFallbackDetail: "JPEG fallback: {detail}",
+  decodeStats: "Decode {ms} ms · {dropped} stale frames dropped",
+  petRunning: "Out for a run",
+  petConnecting: "Connecting",
+  petOffline: "Connection asleep",
+  petControlling: "Standing guard",
+  petObserving: "Quietly observing",
+  petAccessibility: "{count} terminals connected, {status}",
+  switchToEnglish: "Switch to English",
+  switchToChinese: "Switch to Chinese",
+};
+
+const dictionaries: Record<Language, Record<TranslationKey, string>> = {
+  "zh-CN": chinese,
+  en: english,
+};
+
+export function resolveLanguage(stored: string | null, browserLanguage: string): Language {
+  if (stored === "zh-CN" || stored === "en") return stored;
+  return browserLanguage.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+}
+
+export function alternateLanguage(language: Language): Language {
+  return language === "zh-CN" ? "en" : "zh-CN";
+}
+
+export function translate(
+  key: TranslationKey,
+  language: Language,
+  variables: Record<string, string | number> = {},
+): string {
+  return Object.entries(variables).reduce(
+    (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+    dictionaries[language][key],
+  );
+}
+
+const serverEnglish: Record<string, string> = {
+  "请求来源无效": "Invalid request origin",
+  "尝试次数过多，请稍后再试": "Too many attempts. Try again later.",
+  "配对码不正确": "Incorrect pairing code",
+  "请求格式无效": "Invalid request format",
+  "当前设备没有控制权": "This device does not have control",
+  "消息发送失败": "Message could not be sent",
+  "输入转发失败": "Input forwarding failed",
+  "WebRTC 视频已禁用": "WebRTC video is disabled",
+  "WebRTC 视频启动失败": "WebRTC video failed to start",
+  "浏览器无法启动 WebRTC": "The browser could not start WebRTC",
+  "H.264 原生采集程序不可用": "Native H.264 capture is unavailable",
+  "WebRTC 视频连接失败": "WebRTC video connection failed",
+  "H.264 原生采集不可用": "Native H.264 capture is unavailable",
+  "WebRTC offer 无效": "Invalid WebRTC offer",
+  "浏览器未确认 H.264 首帧": "The browser did not confirm the first H.264 frame",
+  "没有找到可用的 Codex 输入框": "No available Codex input was found",
+  "Codex 未确认这条补充消息，内容已保留在远程输入栏": "Codex did not confirm the message. Its content remains in the remote input.",
+  "没有找到符合预期结构的 Codex 渲染页面": "No Codex renderer with the expected structure was found",
+  "Codex 渲染页面尚未连接": "The Codex renderer is not connected yet",
+  "Codex 页面尺寸尚未就绪": "The Codex page dimensions are not ready yet",
+};
+
+export function translateServerText(value: string, language: Language): string {
+  if (language === "zh-CN") return value;
+  return serverEnglish[value] || value;
+}

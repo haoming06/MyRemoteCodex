@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#11100f" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>My Remote Codex</title>
+  </head>
+  <body>
+    <main id="app">
+      <section id="pair-view" class="pair-view" aria-labelledby="pair-title">
+        <button class="language-toggle pair-language-toggle" type="button" data-language-toggle>
+          <i data-lucide="languages"></i>
+          <span>EN</span>
+        </button>
+        <form id="pair-form" class="pair-panel">
+          <div class="pair-mark" aria-hidden="true">
+            <i data-lucide="monitor-smartphone"></i>
+          </div>
+          <h1 id="pair-title">My Remote Codex</h1>
+          <p data-i18n="connectComputer">连接这台电脑</p>
+          <label for="pair-code" data-i18n="pairingCode">配对码</label>
+          <input
+            id="pair-code"
+            name="code"
+            type="text"
+            inputmode="text"
+            autocomplete="one-time-code"
+            autocapitalize="characters"
+            minlength="8"
+            maxlength="8"
+            pattern="[A-Za-z2-9]{8}"
+            required
+          />
+          <section id="pair-history" class="pair-history" aria-labelledby="pair-history-title" hidden>
+            <h2 id="pair-history-title" data-i18n="recentPairingCodes">最近使用</h2>
+            <ul id="pair-history-list"></ul>
+          </section>
+          <button class="primary-command" type="submit">
+            <i data-lucide="lock-keyhole"></i>
+            <span data-i18n="connect">连接</span>
+          </button>
+          <output id="pair-error" class="form-error" aria-live="polite"></output>
+        </form>
+      </section>
+
+      <section id="remote-view" class="remote-view" hidden>
+        <header class="app-bar">
+          <div class="identity">
+            <i data-lucide="monitor-smartphone" aria-hidden="true"></i>
+            <span>My Remote Codex</span>
+          </div>
+          <div class="connection" id="connection-state">
+            <span class="status-dot"></span>
+            <span id="connection-label">正在连接</span>
+            <output id="stream-stats" class="stream-stats" hidden></output>
+          </div>
+          <nav class="toolbar" aria-label="画面控制" data-i18n-aria-label="displayControls">
+            <div class="quality-control" role="group" aria-label="画面清晰度" data-i18n-aria-label="displayQuality">
+              <button class="quality-option" type="button" data-quality-profile="normal" aria-pressed="true" data-i18n="normalQuality">普通</button>
+              <button class="quality-option" type="button" data-quality-profile="high" aria-pressed="false" data-i18n="highQuality">高清</button>
+            </div>
+            <button id="mode-button" class="icon-button" type="button" title="切换触摸模式" aria-label="切换触摸模式" data-i18n-title="switchTouchMode" data-i18n-aria-label="switchTouchMode">
+              <i data-lucide="hand"></i>
+            </button>
+            <button id="fit-button" class="icon-button" type="button" title="适合窗口" aria-label="适合窗口" data-i18n-title="fitWindow" data-i18n-aria-label="fitWindow">
+              <i data-lucide="scan-line"></i>
+            </button>
+            <button id="reset-button" class="icon-button" type="button" title="重置缩放" aria-label="重置缩放" data-i18n-title="resetZoom" data-i18n-aria-label="resetZoom">
+              <i data-lucide="rotate-ccw"></i>
+            </button>
+            <button id="fullscreen-button" class="icon-button" type="button" title="全屏" aria-label="全屏" data-i18n-title="fullscreen" data-i18n-aria-label="fullscreen">
+              <i data-lucide="maximize"></i>
+            </button>
+            <button class="language-toggle toolbar-language-toggle" type="button" data-language-toggle>
+              <i data-lucide="languages"></i>
+              <span>EN</span>
+            </button>
+            <button id="logout-button" class="icon-button danger-button" type="button" title="断开设备" aria-label="断开设备" data-i18n-title="disconnectDevice" data-i18n-aria-label="disconnectDevice">
+              <i data-lucide="log-out"></i>
+            </button>
+          </nav>
+        </header>
+
+        <div id="stage" class="stage" tabindex="0" aria-label="Codex 远程画面" data-i18n-aria-label="remoteDisplay">
+          <canvas id="remote-canvas"></canvas>
+          <video id="remote-video" autoplay muted playsinline hidden></video>
+          <textarea
+            id="keyboard-capture"
+            class="keyboard-capture"
+            aria-label="远程键盘输入"
+            data-i18n-aria-label="remoteKeyboardInput"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="sentences"
+            spellcheck="false"
+            tabindex="-1"
+          ></textarea>
+          <div id="empty-state" class="empty-state" aria-live="polite">
+            <i data-lucide="radio" aria-hidden="true"></i>
+            <strong id="empty-title" data-i18n="waitingForCodex">等待 Codex</strong>
+            <span id="empty-detail" data-i18n="findingWindow">正在查找本机渲染窗口</span>
+          </div>
+          <div id="mode-indicator" class="mode-indicator">
+            <i data-lucide="hand"></i>
+            <span data-i18n="browse">浏览</span>
+          </div>
+          <button
+            id="codex-pet"
+            class="codex-pet"
+            data-expression="neutral"
+            data-state="connecting"
+            type="button"
+            title="点击让它跑一圈"
+            data-i18n-title="petRunTitle"
+            aria-live="polite"
+          >
+            <div class="pet-count">
+              <span id="terminal-count">0</span>
+              <span data-i18n="terminals">个终端</span>
+            </div>
+            <div class="pet-character" aria-hidden="true">
+              <span class="pet-dog">
+                <span class="pet-ear pet-ear-left"></span>
+                <span class="pet-ear pet-ear-right"></span>
+                <span class="pet-face">
+                  <span class="pet-eye pet-eye-left"></span>
+                  <span class="pet-eye pet-eye-right"></span>
+                  <span class="pet-mouth"></span>
+                </span>
+                <span class="pet-body"></span>
+                <span class="pet-tail"></span>
+              </span>
+            </div>
+            <span id="pet-status" class="pet-status">正在连接</span>
+          </button>
+        </div>
+
+        <form id="composer-form" class="mobile-composer">
+          <i data-lucide="keyboard" aria-hidden="true"></i>
+          <textarea
+            id="composer-input"
+            rows="1"
+            maxlength="16384"
+            lang="zh-CN"
+            inputmode="text"
+            autocomplete="off"
+            autocorrect="on"
+            autocapitalize="sentences"
+            spellcheck="true"
+            enterkeyhint="send"
+            placeholder="向 Codex 发送内容"
+            data-i18n-placeholder="sendToCodex"
+          ></textarea>
+          <button
+            id="clear-composer-button"
+            class="clear-composer-button"
+            type="button"
+            title="清空输入内容"
+            aria-label="清空输入内容"
+            aria-hidden="true"
+            data-i18n-title="clearComposer"
+            data-i18n-aria-label="clearComposer"
+            disabled
+          >
+            <i data-lucide="x"></i>
+          </button>
+          <button id="send-button" class="send-button" type="submit" title="发送" aria-label="发送" data-i18n-title="send" data-i18n-aria-label="send">
+            <i data-lucide="send"></i>
+          </button>
+          <output id="composer-status" class="visually-hidden" aria-live="polite"></output>
+        </form>
+      </section>
+    </main>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
