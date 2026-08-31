@@ -67,6 +67,7 @@ describe("CdpMirror", () => {
                       width: 1280,
                       height: 800,
                       deviceScaleFactor: 2,
+                      editableRegions: [{ left: 320, top: 700, width: 640, height: 64 }],
                     }
                   : expression === "document.visibilityState"
                     ? visibilityState
@@ -126,6 +127,7 @@ describe("CdpMirror", () => {
       await expect(connected).resolves.toMatchObject({
         phase: "connected",
         viewport: { width: 1280, height: 800 },
+        editableRegions: [{ left: 320, top: 700, width: 640, height: 64 }],
       });
       await expect(frame).resolves.toMatchObject({ sessionId: 7 });
 

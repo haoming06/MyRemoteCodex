@@ -24,6 +24,7 @@ export interface MirrorState {
   captureMode?: CaptureMode;
   targetTitle?: string;
   viewport?: { width: number; height: number };
+  editableRegions?: Array<{ left: number; top: number; width: number; height: number }>;
   stream?: StreamSettings;
   detail?: string;
 }
@@ -59,18 +60,34 @@ interface TargetProbe {
   width: number;
   height: number;
   deviceScaleFactor: number;
+  editableRegions: Array<{ left: number; top: number; width: number; height: number }>;
 }
 
 const PROBE_EXPRESSION = `(() => {
   const main = document.querySelector('main, [role="main"]');
   const input = document.querySelector('textarea, [contenteditable="true"], [role="textbox"]');
   const shell = document.querySelector('[data-testid="app-shell-header-context-menu-surface"]');
+  const editableRegions = [...document.querySelectorAll(
+    'input:not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]'
+  )].flatMap((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    if (
+      rect.width <= 0
+      || rect.height <= 0
+      || style.visibility === 'hidden'
+      || style.display === 'none'
+      || style.pointerEvents === 'none'
+    ) return [];
+    return [{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }];
+  });
   return {
     codex: location.protocol === 'app:' && Boolean(document.body) && Boolean(main || input || shell),
     visible: document.visibilityState === 'visible',
     width: innerWidth,
     height: innerHeight,
-    deviceScaleFactor: Number.isFinite(devicePixelRatio) ? devicePixelRatio : 1
+    deviceScaleFactor: Number.isFinite(devicePixelRatio) ? devicePixelRatio : 1,
+    editableRegions
   };
 })()`;
 
@@ -301,6 +318,7 @@ export class CdpMirror extends EventEmitter {
       captureMode: "screencast",
       targetTitle: target.title || "Codex",
       viewport: { width: probe.width, height: probe.height },
+      editableRegions: probe.editableRegions,
       stream,
     });
     this.startBackgroundCaptureMonitor(session, probe);

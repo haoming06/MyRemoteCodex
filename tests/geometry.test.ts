@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { clampZoom, fitScale, pointToSource } from "../client/geometry";
+import {
+  clampZoom,
+  fitScale,
+  pointToSource,
+  viewTransformAfterCompactModeChange,
+} from "../client/geometry";
 
 describe("mobile viewport geometry", () => {
   it("maps a scaled canvas point back to renderer coordinates", () => {
@@ -20,5 +25,18 @@ describe("mobile viewport geometry", () => {
     expect(fitScale({ width: 390, height: 700 }, { width: 1440, height: 900 })).toBeCloseTo(390 / 1440);
     expect(clampZoom(10)).toBe(4);
     expect(clampZoom(0.1)).toBe(0.5);
+  });
+
+  it("resets zoom and pan when rotating out of compact landscape mode", () => {
+    expect(viewTransformAfterCompactModeChange(
+      true,
+      false,
+      { fit: true, userZoom: 2.4, panX: 180, panY: -36 },
+    )).toEqual({ fit: true, userZoom: 1, panX: 0, panY: 0 });
+  });
+
+  it("preserves the transform while the viewport mode is unchanged", () => {
+    const transform = { fit: true, userZoom: 1.5, panX: 80, panY: 12 };
+    expect(viewTransformAfterCompactModeChange(false, false, transform)).toEqual(transform);
   });
 });

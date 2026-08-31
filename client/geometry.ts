@@ -15,6 +15,13 @@ export interface SourcePoint {
   y: number;
 }
 
+export interface ViewTransform {
+  fit: boolean;
+  userZoom: number;
+  panX: number;
+  panY: number;
+}
+
 export function pointToSource(
   clientX: number,
   clientY: number,
@@ -43,4 +50,13 @@ export function fitScale(
 
 export function clampZoom(value: number): number {
   return Math.min(4, Math.max(0.5, value));
+}
+
+export function viewTransformAfterCompactModeChange(
+  previousCompact: boolean | undefined,
+  nextCompact: boolean,
+  current: ViewTransform,
+): ViewTransform {
+  if (previousCompact === undefined || previousCompact === nextCompact) return current;
+  return { fit: true, userZoom: 1, panX: 0, panY: 0 };
 }

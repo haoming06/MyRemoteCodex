@@ -416,6 +416,10 @@ textarea:focus-visible,
   height: 17px;
 }
 
+.composer-toggle-button {
+  display: none;
+}
+
 .danger-button {
   color: #d98a7d;
 }
@@ -1042,6 +1046,99 @@ textarea:focus-visible,
   .quality-control {
     margin-right: 1px;
   }
+}
+
+.remote-view.compact-landscape {
+  position: relative;
+  display: block;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.compact-landscape .stage {
+  position: absolute;
+  inset: 0;
+}
+
+.compact-landscape .app-bar {
+  position: absolute;
+  top: max(6px, env(safe-area-inset-top));
+  right: max(6px, env(safe-area-inset-right));
+  z-index: 14;
+  width: max-content;
+  max-width: calc(100% - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+  height: 38px;
+  grid-template-columns: auto;
+  gap: 0;
+  padding: 2px;
+  overflow-x: auto;
+  border: 1px solid #484640;
+  border-radius: 7px;
+  background: rgb(25 24 23 / 92%);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 38%);
+  backdrop-filter: blur(10px);
+  scrollbar-width: none;
+}
+
+.compact-landscape .app-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.compact-landscape .identity,
+.compact-landscape .connection {
+  display: none;
+}
+
+.compact-landscape .toolbar {
+  grid-column: 1;
+  justify-content: flex-start;
+}
+
+.compact-landscape .icon-button,
+.compact-landscape .language-toggle {
+  width: 32px;
+  height: 32px;
+}
+
+.compact-landscape .quality-control {
+  height: 30px;
+}
+
+.compact-landscape .composer-toggle-button {
+  display: grid;
+}
+
+.compact-landscape .mobile-composer {
+  position: absolute;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 15;
+  display: none;
+  width: min(620px, calc(100% - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right))));
+  min-height: 54px;
+  transform: translateX(-50%);
+  padding: 8px;
+  border: 1px solid #4a4843;
+  border-radius: 7px;
+  background: rgb(25 24 23 / 96%);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 48%);
+  backdrop-filter: blur(10px);
+}
+
+.compact-landscape.composer-open .mobile-composer {
+  display: grid;
+}
+
+.compact-landscape .mobile-composer textarea {
+  max-height: min(112px, calc(100dvh - 86px));
+}
+
+.compact-landscape .codex-pet {
+  display: none;
+}
+
+.compact-landscape .mode-indicator {
+  top: max(50px, calc(env(safe-area-inset-top) + 44px));
 }
 
 @media (prefers-reduced-motion: reduce) {

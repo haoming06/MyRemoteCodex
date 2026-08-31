@@ -17,7 +17,14 @@ import {
 } from "lucide";
 import { decodeFramePacket, type FramePacket } from "../src/frame-transport";
 import type { ClientMessage } from "../src/protocol";
-import { clampZoom, fitScale, pointToSource, type SourceSize } from "./geometry";
+import {
+  clampZoom,
+  fitScale,
+  pointToSource,
+  viewTransformAfterCompactModeChange,
+  type DisplayRect,
+  type SourceSize,
+} from "./geometry";
 import { AnimationFrameCoalescer, mergeWheelInputs } from "./input-coalescer";
 import {
   alternateLanguage,
@@ -30,6 +37,7 @@ import {
 } from "./i18n";
 import { buildSubmissionMessage, remainingComposerTextAfterSuccess } from "./submission";
 import {
+  shouldCaptureKeyboardForTouch,
   singleTouchAction,
   updatePinchGesture,
   type PinchGestureState,
@@ -94,6 +102,7 @@ const modeIndicator = required<HTMLElement>("#mode-indicator");
 const fitButton = required<HTMLButtonElement>("#fit-button");
 const resetButton = required<HTMLButtonElement>("#reset-button");
 const fullscreenButton = required<HTMLButtonElement>("#fullscreen-button");
+const composerToggleButton = required<HTMLButtonElement>("#composer-toggle-button");
 const logoutButton = required<HTMLButtonElement>("#logout-button");
 const composerForm = required<HTMLFormElement>("#composer-form");
 const composerInput = required<HTMLTextAreaElement>("#composer-input");
@@ -124,6 +133,7 @@ type MirrorState = {
   captureMode?: "screencast" | "screenshot-fallback";
   detail?: string;
   viewport?: SourceSize;
+  editableRegions?: DisplayRect[];
 };
 type ConnectionLabelSource = TranslationKey | { serverText: string };
 let authenticated = false;
@@ -142,6 +152,8 @@ let fit = true;
 let userZoom = 1;
 let panX = 0;
 let panY = 0;
+let compactLandscape: boolean | undefined;
+let editableRegions: DisplayRect[] = [];
 let pendingFrame: FramePacket | undefined;
 let decodingFrame = false;
 let captureComposing = false;
@@ -165,6 +177,9 @@ let connectionLabelSource: ConnectionLabelSource = "connecting";
 let latestMirrorState: MirrorState | undefined;
 let pairErrorSource: string | undefined;
 let savedPairingCodes = loadPairingCodeHistory(window.localStorage);
+const compactLandscapeQuery = window.matchMedia(
+  "(orientation: landscape) and (max-height: 520px) and (any-pointer: coarse)",
+);
 
 function t(key: TranslationKey, variables?: Record<string, string | number>): string {
   return translate(key, currentLanguage, variables);
@@ -204,7 +219,46 @@ function applyStaticTranslations(): void {
     button.title = title;
     button.setAttribute("aria-label", title);
   }
+  updateComposerToggle();
   renderPairingCodeHistory();
+}
+
+function updateComposerToggle(): void {
+  const open = remoteView.classList.contains("composer-open");
+  const title = t(open ? "closeComposer" : "openComposer");
+  composerToggleButton.title = title;
+  composerToggleButton.setAttribute("aria-label", title);
+  composerToggleButton.setAttribute("aria-expanded", String(open));
+  composerToggleButton.setAttribute("aria-pressed", String(open));
+}
+
+function setComposerOpen(open: boolean, focus = false): void {
+  const nextOpen = open && remoteView.classList.contains("compact-landscape");
+  remoteView.classList.toggle("composer-open", nextOpen);
+  updateComposerToggle();
+  if (nextOpen && focus) {
+    window.requestAnimationFrame(() => composerInput.focus({ preventScroll: true }));
+  }
+}
+
+function syncCompactLandscape(): void {
+  const compact = compactLandscapeQuery.matches;
+  const transform = viewTransformAfterCompactModeChange(
+    compactLandscape,
+    compact,
+    { fit, userZoom, panX, panY },
+  );
+  fit = transform.fit;
+  userZoom = transform.userZoom;
+  panX = transform.panX;
+  panY = transform.panY;
+  const changed = compactLandscape !== undefined && compactLandscape !== compact;
+  compactLandscape = compact;
+  remoteView.classList.toggle("compact-landscape", compact);
+  if (!compact) remoteView.classList.remove("composer-open");
+  updateComposerToggle();
+  updateTransform();
+  if (changed) window.requestAnimationFrame(updateTransform);
 }
 
 function renderPairingCodeHistory(): void {
@@ -300,6 +354,11 @@ function resolveSubmission(message: Extract<ServerMessage, { type: "submission" 
       updateComposerInput();
     }
     composerStatus.textContent = t("sent");
+    if (remoteView.classList.contains("compact-landscape")) {
+      setComposerOpen(false);
+      composerInput.blur();
+      return;
+    }
   } else {
     composerStatus.textContent = message.error
       ? translateServerText(message.error, currentLanguage)
@@ -428,6 +487,7 @@ function updateMirrorState(state: MirrorState): void {
   mirrorConnected = state.phase === "connected";
   qualityProfile = state.qualityProfile || "normal";
   captureMode = state.captureMode || "screencast";
+  editableRegions = state.editableRegions || [];
   if (state.viewport?.width && state.viewport?.height) source = state.viewport;
   if (mirrorConnected) {
     setConnection("online", onlineConnectionLabel());
@@ -833,6 +893,14 @@ function finishPointer(event: PointerEvent): void {
       sendPointer(event, "down");
       sendPointer(event, "up");
     }
+    const point = sourcePoint(event.clientX, event.clientY);
+    if (
+      event.type === "pointerup"
+      && touches.size === 1
+      && shouldCaptureKeyboardForTouch(point, editableRegions, moved)
+    ) {
+      keyboardCapture.focus({ preventScroll: true });
+    }
     touches.delete(event.pointerId);
     if (touches.size < 2) pinch = undefined;
   } else if (event.pointerType !== "touch") {
@@ -986,6 +1054,13 @@ clearComposerButton.addEventListener("click", () => {
 });
 
 composerInput.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && remoteView.classList.contains("compact-landscape")) {
+    event.preventDefault();
+    setComposerOpen(false);
+    composerInput.blur();
+    stage.focus({ preventScroll: true });
+    return;
+  }
   if (
     event.key === "Enter"
     && !event.shiftKey
@@ -1072,6 +1147,11 @@ fullscreenButton.addEventListener("click", async () => {
   else await remoteView.requestFullscreen();
 });
 
+composerToggleButton.addEventListener("click", () => {
+  const open = !remoteView.classList.contains("composer-open");
+  setComposerOpen(open, open);
+});
+
 logoutButton.addEventListener("click", async () => {
   authenticated = false;
   await fetch("/api/logout", { method: "POST" }).catch(() => undefined);
@@ -1084,8 +1164,10 @@ for (const button of languageButtons) {
 
 new ResizeObserver(updateTransform).observe(stage);
 window.visualViewport?.addEventListener("resize", updateTransform);
+compactLandscapeQuery.addEventListener("change", syncCompactLandscape);
 
 async function bootstrap(): Promise<void> {
+  syncCompactLandscape();
   applyStaticTranslations();
   renderIcons();
   canvas.hidden = true;

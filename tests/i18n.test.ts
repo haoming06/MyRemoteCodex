@@ -25,6 +25,8 @@ describe("web i18n", () => {
   it("translates interpolated UI and server messages", () => {
     expect(translate("petAccessibility", "en", { count: 2, status: "Connected" }))
       .toBe("2 terminals connected, Connected");
+    expect(translate("openComposer", "zh-CN")).toBe("打开输入框");
+    expect(translate("closeComposer", "en")).toBe("Close message input");
     expect(translateServerText("配对码不正确", "en")).toBe("Incorrect pairing code");
     expect(translateServerText("unknown detail", "en")).toBe("unknown detail");
   });

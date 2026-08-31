@@ -102,7 +102,7 @@ scp -r root@11.22.33.44:/root/my-remote-codex-device-01 .
 
 ## 文档
 
-- [用户指南：操作、配置、安全边界与实机验证](docs/user-guide.md)
+- [用户指南：操作、配置、故障排查、安全边界与实机验证](docs/user-guide.md)
 - [FRP 自托管部署：服务器、Mac、非标准 HTTPS 端口与排障](docs/frp-self-hosting.md)
 - [macOS 安装版：配置应用、DMG、签名与公证](docs/macos-installer.md)
 
