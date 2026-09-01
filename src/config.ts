@@ -59,6 +59,7 @@ export interface AppConfig {
   sessionTtlMs: number;
   tlsCertPath?: string;
   tlsKeyPath?: string;
+  publicOrigin?: string;
   secureCookies: boolean;
   staticRoot: string;
   videoTransport: "auto" | "jpeg";
@@ -114,6 +115,29 @@ function commandPath(value: string): string {
 
 function isLoopbackHost(host: string): boolean {
   return ["127.0.0.1", "::1", "localhost"].includes(host.toLowerCase());
+}
+
+function publicOrigin(env: NodeJS.ProcessEnv): string | undefined {
+  const raw = env.REMOTE_CODEX_PUBLIC_ORIGIN?.trim();
+  if (!raw) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error("REMOTE_CODEX_PUBLIC_ORIGIN must be a valid HTTPS origin");
+  }
+  if (
+    parsed.protocol !== "https:"
+    || !parsed.hostname
+    || parsed.username
+    || parsed.password
+    || parsed.pathname !== "/"
+    || parsed.search
+    || parsed.hash
+  ) {
+    throw new Error("REMOTE_CODEX_PUBLIC_ORIGIN must be an HTTPS origin without credentials, path, query, or fragment");
+  }
+  return parsed.origin;
 }
 
 function videoTransport(env: NodeJS.ProcessEnv): "auto" | "jpeg" {
@@ -209,6 +233,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const host = env.REMOTE_CODEX_HOST || "127.0.0.1";
   const frp = loadFrpConfig(env, host);
+  const configuredPublicOrigin = publicOrigin(env);
+  if (configuredPublicOrigin && !isLoopbackHost(host)) {
+    throw new Error("REMOTE_CODEX_HOST must be a loopback address when REMOTE_CODEX_PUBLIC_ORIGIN is set");
+  }
   const allowInsecureHttp = booleanFromEnv(env, "REMOTE_CODEX_ALLOW_INSECURE_HTTP", false);
   if (!isLoopbackHost(host) && !tlsCertPath && !frp && !allowInsecureHttp) {
     throw new Error(
@@ -216,9 +244,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       + "or explicitly set REMOTE_CODEX_ALLOW_INSECURE_HTTP=true for a trusted LAN",
     );
   }
-  const secureCookies = booleanFromEnv(env, "REMOTE_CODEX_SECURE_COOKIE", Boolean(tlsCertPath || frp));
-  if ((tlsCertPath || frp) && !secureCookies) {
-    throw new Error("REMOTE_CODEX_SECURE_COOKIE cannot be disabled when HTTPS or FRP is enabled");
+  const securePublicAccess = Boolean(tlsCertPath || frp || configuredPublicOrigin);
+  const secureCookies = booleanFromEnv(env, "REMOTE_CODEX_SECURE_COOKIE", securePublicAccess);
+  if (securePublicAccess && !secureCookies) {
+    throw new Error(
+      "REMOTE_CODEX_SECURE_COOKIE cannot be disabled when HTTPS or FRP is enabled, "
+      + "or when a public origin is configured",
+    );
   }
 
   return {
@@ -239,6 +271,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     sessionTtlMs: integerFromEnv(env, "REMOTE_CODEX_SESSION_HOURS", 12, 1, 168) * 60 * 60 * 1000,
     tlsCertPath,
     tlsKeyPath,
+    publicOrigin: configuredPublicOrigin,
     secureCookies,
     staticRoot: path.resolve(process.cwd(), "dist/client"),
     videoTransport: videoTransport(env),

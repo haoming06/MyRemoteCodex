@@ -57,6 +57,10 @@ final class AppModel: ObservableObject {
     }
 
     var localURL: URL { URL(string: "http://127.0.0.1:\(config.port)")! }
+    var externalPublicURL: URL? {
+        guard let value = config.externalPublicURL else { return nil }
+        return URL(string: value)
+    }
     var isRunning: Bool { serverProcess?.isRunning == true }
 
     func text(_ chinese: String, _ english: String) -> String {
@@ -185,6 +189,10 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.open(localURL)
     }
 
+    func openExternalPage() {
+        if let externalPublicURL { NSWorkspace.shared.open(externalPublicURL) }
+    }
+
     func chooseFile(title: String, executable: Bool = false, apply: (String) -> Void) {
         let panel = NSOpenPanel()
         panel.title = title
@@ -262,14 +270,20 @@ final class AppModel: ObservableObject {
 
     private func serverEnvironment() -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        environment["REMOTE_CODEX_HOST"] = config.frpEnabled ? "127.0.0.1" : (config.allowLAN ? "0.0.0.0" : "127.0.0.1")
-        environment["REMOTE_CODEX_ALLOW_INSECURE_HTTP"] = config.allowLAN && !config.frpEnabled ? "true" : "false"
+        let usesTunnel = config.frpEnabled || config.hasExternalPublicURL
+        environment["REMOTE_CODEX_HOST"] = usesTunnel ? "127.0.0.1" : (config.allowLAN ? "0.0.0.0" : "127.0.0.1")
+        environment["REMOTE_CODEX_ALLOW_INSECURE_HTTP"] = config.allowLAN && !usesTunnel ? "true" : "false"
         environment["REMOTE_CODEX_PORT"] = String(config.port)
         environment["REMOTE_CODEX_CDP_PORT"] = String(config.cdpPort)
         environment["REMOTE_CODEX_PAIRING_CODE"] = config.pairingCode
         environment["REMOTE_CODEX_NATIVE_CAPTURE_BINARY"] = paths.captureBinary.path
         environment["REMOTE_CODEX_VIDEO_TRANSPORT"] = "auto"
         environment["REMOTE_CODEX_FRP_ENABLED"] = config.frpEnabled ? "true" : "false"
+        if let externalPublicURL = config.externalPublicURL {
+            environment["REMOTE_CODEX_PUBLIC_ORIGIN"] = externalPublicURL
+        } else {
+            environment.removeValue(forKey: "REMOTE_CODEX_PUBLIC_ORIGIN")
+        }
         guard config.frpEnabled else { return environment }
 
         environment["REMOTE_CODEX_FRP_BINARY"] = config.frpcPath.isEmpty ? paths.bundledFrpc.path : config.frpcPath

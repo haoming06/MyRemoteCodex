@@ -127,6 +127,8 @@ describe("macOS installer", () => {
     expect(hostSources).toContain(".applicationSupportDirectory");
     expect(hostSources).toContain(".posixPermissions: 0o600");
     expect(hostSources).toContain("REMOTE_CODEX_FRP_ENABLED");
+    expect(hostSources).toContain("REMOTE_CODEX_PUBLIC_ORIGIN");
+    expect(hostSources).toContain("外部 HTTPS 地址");
     expect(hostSources).toContain("127.0.0.1");
     expect(hostSources).toContain("连接测试");
     expect(hostSources).toContain("FRP token");

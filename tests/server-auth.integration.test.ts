@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 
 const PAIRING_CODE = "SECURE23";
+const PUBLIC_ORIGIN = "https://device.example-tunnel.com";
 
 async function availablePort(): Promise<number> {
   const server = net.createServer();
@@ -69,6 +70,7 @@ describe("server authentication boundary", () => {
         REMOTE_CODEX_PORT: String(port),
         REMOTE_CODEX_CDP_PORT: String(cdpPort),
         REMOTE_CODEX_PAIRING_CODE: PAIRING_CODE,
+        REMOTE_CODEX_PUBLIC_ORIGIN: PUBLIC_ORIGIN,
         REMOTE_CODEX_VIDEO_TRANSPORT: "jpeg",
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -99,6 +101,26 @@ describe("server authentication boundary", () => {
       body: JSON.stringify({ code: PAIRING_CODE }),
     });
     expect(crossSchemePair.status).toBe(403);
+
+    const publicProxyPair = await fetch(`${baseUrl}/api/pair`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: PUBLIC_ORIGIN },
+      body: JSON.stringify({ code: PAIRING_CODE }),
+    });
+    expect({
+      status: publicProxyPair.status,
+      body: await publicProxyPair.json(),
+    }).toEqual({ status: 200, body: { ok: true } });
+    expect(publicProxyPair.headers.get("set-cookie")).toContain("Secure");
+    const publicCookie = publicProxyPair.headers.get("set-cookie")?.split(";", 1)[0];
+    expect(publicCookie).toMatch(/^remote_codex_session=/);
+    if (!publicCookie) throw new Error("Public proxy pairing response did not set a session cookie");
+    const publicSocket = new WebSocket(websocketUrl, {
+      headers: { Cookie: publicCookie, Origin: PUBLIC_ORIGIN },
+    });
+    await once(publicSocket, "open");
+    publicSocket.close();
+    await once(publicSocket, "close");
 
     const wrongPair = await fetch(`${baseUrl}/api/pair`, {
       method: "POST",

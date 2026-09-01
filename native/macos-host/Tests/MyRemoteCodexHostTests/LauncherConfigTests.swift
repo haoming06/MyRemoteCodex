@@ -40,6 +40,7 @@ final class LauncherConfigTests: XCTestCase {
     func testLocalDefaultsValidateWithoutFRPCredentials() throws {
         var config = LauncherConfig()
         XCTAssertFalse(config.allowLAN)
+        XCTAssertFalse(config.hasExternalPublicURL)
         XCTAssertFalse(config.startOnAppLaunch)
         XCTAssertTrue(config.preventsSystemSleepWhileRunning)
         XCTAssertFalse(config.frpEnabled)
@@ -62,6 +63,28 @@ final class LauncherConfigTests: XCTestCase {
         let decoded = try JSONDecoder().decode(LauncherConfig.self, from: JSONEncoder().encode(config))
         XCTAssertEqual(decoded.appLanguage, .english)
         XCTAssertFalse(decoded.preventsSystemSleepWhileRunning)
+    }
+
+    func testExternalHTTPSURLSupportsThirdPartyTunnels() throws {
+        var config = LauncherConfig()
+        config.externalPublicURL = "  https://device.example-tunnel.com/  "
+
+        config.normalize()
+
+        XCTAssertEqual(config.externalPublicURL, "https://device.example-tunnel.com/")
+        XCTAssertTrue(config.hasExternalPublicURL)
+        XCTAssertNoThrow(try config.validate(frpToken: "", gatewayToken: "", paths: .current()))
+
+        let decoded = try JSONDecoder().decode(LauncherConfig.self, from: JSONEncoder().encode(config))
+        XCTAssertEqual(decoded.externalPublicURL, config.externalPublicURL)
+    }
+
+    func testExternalTunnelRejectsNonHTTPSAndURLPaths() {
+        for value in ["http://device.example.com", "https://device.example.com/control"] {
+            var config = LauncherConfig()
+            config.externalPublicURL = value
+            XCTAssertThrowsError(try config.validate(frpToken: "", gatewayToken: "", paths: .current()))
+        }
     }
 
     func testDesktopTranslationsResolveBothLanguages() {

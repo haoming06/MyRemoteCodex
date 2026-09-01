@@ -75,6 +75,32 @@ describe("FRP configuration", () => {
     })).toThrow("cannot be disabled when HTTPS or FRP is enabled");
   });
 
+  it("accepts one explicit HTTPS origin for an external tunnel", () => {
+    const config = loadConfig({
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.example-tunnel.com:8443/",
+    });
+    expect(config.publicOrigin).toBe("https://device.example-tunnel.com:8443");
+    expect(config.secureCookies).toBe(true);
+
+    expect(() => loadConfig({
+      REMOTE_CODEX_PUBLIC_ORIGIN: "http://device.example-tunnel.com",
+    })).toThrow("must be an HTTPS origin");
+    expect(() => loadConfig({
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.example-tunnel.com/control",
+    })).toThrow("without credentials, path, query, or fragment");
+  });
+
+  it("keeps an external HTTPS tunnel on loopback with secure cookies", () => {
+    expect(() => loadConfig({
+      REMOTE_CODEX_HOST: "0.0.0.0",
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.example-tunnel.com",
+    })).toThrow("must be a loopback address");
+    expect(() => loadConfig({
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.example-tunnel.com",
+      REMOTE_CODEX_SECURE_COOKIE: "false",
+    })).toThrow("cannot be disabled");
+  });
+
   it("loads the restricted FRP settings and forces secure cookies", () => {
     const config = loadConfig(frpEnv());
     expect(config.secureCookies).toBe(true);

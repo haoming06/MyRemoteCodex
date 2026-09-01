@@ -70,6 +70,7 @@ enum DesktopI18n {
         "无法读取连接测试响应": "Could not read the connection test response",
         "配对码必须恰好为 8 位字母或数字 2-9": "The pairing code must contain exactly 8 letters or digits 2-9",
         "服务端口和 CDP 端口必须不同，且位于 1024-65535": "The service and CDP ports must differ and be between 1024 and 65535",
+        "外部 HTTPS 地址必须是不含路径、参数或凭据的完整 HTTPS 地址": "The external HTTPS URL must be a complete HTTPS origin without a path, query, or credentials",
         "FRP 地址必须是有效主机名或 IP": "The FRP address must be a valid hostname or IP address",
         "FRP 端口必须位于 1-65535": "The FRP port must be between 1 and 65535",
         "设备 ID 和用户只能包含字母、数字、点、下划线或连字符": "Device ID and user may contain only letters, numbers, dots, underscores, or hyphens",

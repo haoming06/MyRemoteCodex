@@ -33,6 +33,7 @@ const auth = new PairingManager({
   sessionTtlMs: config.sessionTtlMs,
 });
 const publicProtocol = config.tlsCertPath || config.frp ? "https:" : "http:";
+const usesSecurePublicAccess = publicProtocol === "https:" || config.publicOrigin !== undefined;
 const sessionSockets = new Map<string, Set<WebSocket>>();
 const mirror = new CdpMirror({
   cdpPort: config.cdpPort,
@@ -63,7 +64,7 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
-    ...(publicProtocol === "https:" ? { "Strict-Transport-Security": "max-age=31536000" } : {}),
+    ...(usesSecurePublicAccess ? { "Strict-Transport-Security": "max-age=31536000" } : {}),
     "Cross-Origin-Resource-Policy": "same-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Referrer-Policy": "no-referrer",
@@ -105,13 +106,16 @@ function sameOrigin(request: IncomingMessage): boolean {
     const loopbackHttp = parsed.protocol === "http:"
       && ["127.0.0.1", "[::1]", "localhost"].includes(parsed.hostname)
       && ["127.0.0.1", "::1"].includes(request.socket.remoteAddress || "");
-    return (parsed.protocol === publicProtocol || loopbackHttp)
-      && parsed.host.toLowerCase() === host.toLowerCase()
-      && !parsed.username
+    const validShape = !parsed.username
       && !parsed.password
       && parsed.pathname === "/"
       && !parsed.search
       && !parsed.hash;
+    const configuredPublicOrigin = config.publicOrigin !== undefined
+      && parsed.origin === config.publicOrigin;
+    const requestOrigin = (parsed.protocol === publicProtocol || loopbackHttp)
+      && parsed.host.toLowerCase() === host.toLowerCase();
+    return validShape && (configuredPublicOrigin || requestOrigin);
   } catch {
     return false;
   }
@@ -206,7 +210,7 @@ function serveStatic(response: ServerResponse, pathname: string): void {
   response.writeHead(200, {
     "Content-Type": mimeTypes[extension] || "application/octet-stream",
     "Cache-Control": extension === ".html" ? "no-store" : "public, max-age=31536000, immutable",
-    ...(publicProtocol === "https:" ? { "Strict-Transport-Security": "max-age=31536000" } : {}),
+    ...(usesSecurePublicAccess ? { "Strict-Transport-Security": "max-age=31536000" } : {}),
     "Content-Security-Policy": [
       "default-src 'self'",
       "connect-src 'self' ws: wss:",

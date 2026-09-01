@@ -6,6 +6,7 @@ struct LauncherConfig: Codable, Equatable {
     var port = 4_310
     var cdpPort = 9_341
     var allowLAN = false
+    var externalPublicURL: String?
     var startOnAppLaunch = false
     var preventSystemSleepWhileRunning: Bool?
     var language: AppLanguage?
@@ -35,6 +36,10 @@ struct LauncherConfig: Codable, Equatable {
         preventSystemSleepWhileRunning ?? true
     }
 
+    var hasExternalPublicURL: Bool {
+        !(externalPublicURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
     static func generatePairingCode() -> String {
         let length = 8
         let alphabet = Array("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
@@ -49,6 +54,8 @@ struct LauncherConfig: Codable, Equatable {
     mutating func normalize() {
         preventSystemSleepWhileRunning = preventsSystemSleepWhileRunning
         pairingCode = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        externalPublicURL = externalPublicURL?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if externalPublicURL?.isEmpty == true { externalPublicURL = nil }
         frpcPath = frpcPath.trimmingCharacters(in: .whitespacesAndNewlines)
         frpServerAddress = frpServerAddress.trimmingCharacters(in: .whitespacesAndNewlines)
         frpClientID = frpClientID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -78,6 +85,9 @@ struct LauncherConfig: Codable, Equatable {
         }
         guard (1_024...65_535).contains(port), (1_024...65_535).contains(cdpPort), port != cdpPort else {
             throw LauncherError.invalidConfiguration("服务端口和 CDP 端口必须不同，且位于 1024-65535")
+        }
+        if let externalPublicURL, !validExternalPublicURL(externalPublicURL) {
+            throw LauncherError.invalidConfiguration("外部 HTTPS 地址必须是不含路径、参数或凭据的完整 HTTPS 地址")
         }
         guard frpEnabled else { return }
 
@@ -129,6 +139,19 @@ struct LauncherConfig: Codable, Equatable {
         return value.split(separator: ".").allSatisfy { label in
             label.range(of: "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$", options: .regularExpression) != nil
         }
+    }
+
+    private func validExternalPublicURL(_ value: String) -> Bool {
+        guard let components = URLComponents(string: value),
+              components.scheme?.lowercased() == "https",
+              components.host?.isEmpty == false,
+              components.user == nil,
+              components.password == nil,
+              components.path.isEmpty || components.path == "/",
+              components.query == nil,
+              components.fragment == nil,
+              components.url != nil else { return false }
+        return true
     }
 }
 

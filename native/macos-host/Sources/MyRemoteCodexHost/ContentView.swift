@@ -73,7 +73,12 @@ struct ContentView: View {
                     }
                 }
                 Toggle(model.text("允许可信局域网设备访问", "Allow trusted devices on the local network"), isOn: $model.config.allowLAN)
-                    .disabled(model.config.frpEnabled)
+                    .disabled(model.config.frpEnabled || model.config.hasExternalPublicURL)
+                LabeledContent(model.text("外部 HTTPS 地址", "External HTTPS URL")) {
+                    TextField("https://device.example-tunnel.com", text: externalPublicURL)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(minWidth: 320)
+                }
                 Toggle(model.text("打开应用时自动启动服务", "Start the service when the app opens"), isOn: $model.config.startOnAppLaunch)
                 Toggle(
                     model.text("服务运行时防止 Mac 自动休眠", "Prevent automatic sleep while the service is running"),
@@ -163,6 +168,13 @@ struct ContentView: View {
         )
     }
 
+    private var externalPublicURL: Binding<String> {
+        Binding(
+            get: { model.config.externalPublicURL ?? "" },
+            set: { model.config.externalPublicURL = $0 }
+        )
+    }
+
     private var diagnostics: some View {
         VStack(alignment: .leading, spacing: 16) {
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
@@ -181,6 +193,12 @@ struct ContentView: View {
                     Label(model.text("打开本机页面", "Open local page"), systemImage: "safari")
                 }
                 .disabled(model.servicePhase != .running)
+                if model.externalPublicURL != nil {
+                    Button(action: model.openExternalPage) {
+                        Label(model.text("打开公网页面", "Open public page"), systemImage: "globe")
+                    }
+                    .disabled(model.servicePhase != .running)
+                }
                 if model.isBusy { ProgressView().controlSize(.small) }
             }
             Text(model.text("运行日志", "Runtime log"))

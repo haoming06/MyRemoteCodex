@@ -100,9 +100,18 @@ npm run dev
 | `REMOTE_CODEX_WEBRTC_ICE_SERVERS` | `[]` | ICE 服务器 JSON；公网使用 WebRTC 时配置 STUN/TURN |
 | `REMOTE_CODEX_TLS_CERT` | 无 | HTTPS 证书路径，需与私钥同时配置 |
 | `REMOTE_CODEX_TLS_KEY` | 无 | HTTPS 私钥路径 |
+| `REMOTE_CODEX_PUBLIC_ORIGIN` | 无 | 第三方 HTTPS 反向代理或隧道提供的公开 Origin，例如 `https://device.example-tunnel.com`；配置后服务必须只监听回环地址 |
 | `REMOTE_CODEX_SECURE_COOKIE` | 有 TLS 时启用 | 是否强制 Secure Cookie |
 
 FRP 模式需要额外配置公网 `frps`、HTTPS 鉴权网关以及下列环境变量。完整部署方式见 [FRP 自托管部署](frp-self-hosting.md)。
+
+### 第三方 HTTPS 隧道
+
+使用 NiceFRP 等独立客户端把本机 HTTP 服务转发为公网 HTTPS 时，不需要启用应用内置的“FRP 自托管隧道”。在 DMG 的“常规”页填写隧道最终生成的“外部 HTTPS 地址”，保存并重启服务，然后使用该公网地址访问。
+
+该地址必须是完整的 HTTPS Origin，只能包含协议、域名和可选端口，不能包含路径、参数或凭据。应用会精确校验浏览器 `Origin`，自动使用 Secure Cookie，并继续只监听 `127.0.0.1`。如果第三方平台更换了公网地址，需要同步更新此配置。
+
+第三方平台会终止浏览器 TLS 并把请求转发到本机，因此应只使用可信的隧道提供方；此模式不会获得自托管 FRP 网关 token 的额外保护。
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
