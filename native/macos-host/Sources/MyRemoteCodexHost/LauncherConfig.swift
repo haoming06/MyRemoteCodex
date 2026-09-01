@@ -1,6 +1,14 @@
 import Foundation
 import Security
 
+enum FrpMode: String, Codable, CaseIterable, Identifiable {
+    case disabled
+    case externalToml
+    case selfHosted
+
+    var id: String { rawValue }
+}
+
 struct LauncherConfig: Codable, Equatable {
     var pairingCode = LauncherConfig.generatePairingCode()
     var port = 4_310
@@ -12,7 +20,9 @@ struct LauncherConfig: Codable, Equatable {
     var language: AppLanguage?
 
     var frpEnabled = false
+    var frpMode: FrpMode?
     var frpcPath = ""
+    var frpExternalConfigPath: String?
     var frpServerAddress = ""
     var frpServerPort = 7_000
     var frpClientID = ""
@@ -26,6 +36,22 @@ struct LauncherConfig: Codable, Equatable {
 
     var verifiesFRPServerCertificate: Bool {
         frpVerifyServerCertificate ?? true
+    }
+
+    var tunnelMode: FrpMode {
+        get { frpMode ?? (frpEnabled ? .selfHosted : .disabled) }
+        set {
+            frpMode = newValue
+            frpEnabled = newValue == .selfHosted
+        }
+    }
+
+    var hasManagedTunnel: Bool { tunnelMode != .disabled }
+    var usesSelfHostedFRP: Bool { tunnelMode == .selfHosted }
+
+    var externalFrpConfigPath: String {
+        get { frpExternalConfigPath ?? "" }
+        set { frpExternalConfigPath = newValue.isEmpty ? nil : newValue }
     }
 
     var appLanguage: AppLanguage {
@@ -56,7 +82,11 @@ struct LauncherConfig: Codable, Equatable {
         pairingCode = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         externalPublicURL = externalPublicURL?.trimmingCharacters(in: .whitespacesAndNewlines)
         if externalPublicURL?.isEmpty == true { externalPublicURL = nil }
+        let normalizedMode = tunnelMode
+        frpMode = normalizedMode
+        frpEnabled = normalizedMode == .selfHosted
         frpcPath = frpcPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        externalFrpConfigPath = externalFrpConfigPath.trimmingCharacters(in: .whitespacesAndNewlines)
         frpServerAddress = frpServerAddress.trimmingCharacters(in: .whitespacesAndNewlines)
         frpClientID = frpClientID.trimmingCharacters(in: .whitespacesAndNewlines)
         frpUser = frpUser.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -89,7 +119,22 @@ struct LauncherConfig: Codable, Equatable {
         if let externalPublicURL, !validExternalPublicURL(externalPublicURL) {
             throw LauncherError.invalidConfiguration("外部 HTTPS 地址必须是不含路径、参数或凭据的完整 HTTPS 地址")
         }
-        guard frpEnabled else { return }
+        guard hasManagedTunnel else { return }
+
+        let binary = frpcPath.isEmpty ? paths.bundledFrpc.path : frpcPath
+        guard FileManager.default.isExecutableFile(atPath: binary) else {
+            throw LauncherError.invalidConfiguration("找不到可执行的 frpc")
+        }
+
+        if tunnelMode == .externalToml {
+            guard hasExternalPublicURL else {
+                throw LauncherError.invalidConfiguration("通用 TOML 模式必须填写外部 HTTPS 地址")
+            }
+            guard privateRegularFile(atPath: externalFrpConfigPath) else {
+                throw LauncherError.invalidConfiguration("请选择权限不高于 0600 的 FRP TOML 文件")
+            }
+            return
+        }
 
         guard validHostname(frpServerAddress) else {
             throw LauncherError.invalidConfiguration("FRP 地址必须是有效主机名或 IP")
@@ -110,10 +155,6 @@ struct LauncherConfig: Codable, Equatable {
             guard FileManager.default.isReadableFile(atPath: frpTrustedCAPath) else {
                 throw LauncherError.invalidConfiguration("请选择可读取的 FRP CA 证书")
             }
-        }
-        let binary = frpcPath.isEmpty ? paths.bundledFrpc.path : frpcPath
-        guard FileManager.default.isExecutableFile(atPath: binary) else {
-            throw LauncherError.invalidConfiguration("找不到可执行的 frpc v0.71.0")
         }
         guard (8...512).contains(frpToken.unicodeScalars.count),
               (8...512).contains(gatewayToken.unicodeScalars.count) else {
@@ -152,6 +193,14 @@ struct LauncherConfig: Codable, Equatable {
               components.fragment == nil,
               components.url != nil else { return false }
         return true
+    }
+
+    private func privateRegularFile(atPath path: String) -> Bool {
+        guard !path.isEmpty,
+              let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+              attributes[.type] as? FileAttributeType == .typeRegular,
+              let permissions = attributes[.posixPermissions] as? NSNumber else { return false }
+        return permissions.intValue & 0o077 == 0
     }
 }
 

@@ -103,20 +103,23 @@ npm run dev
 | `REMOTE_CODEX_PUBLIC_ORIGIN` | 无 | 外部 HTTPS 反向代理或隧道使用的公开 Origin；配置后服务必须只监听回环地址 |
 | `REMOTE_CODEX_SECURE_COOKIE` | 有 TLS 时启用 | 是否强制 Secure Cookie |
 
-FRP 模式需要额外配置公网 `frps`、HTTPS 鉴权网关以及下列环境变量。完整部署方式见 [FRP 自托管部署](frp-self-hosting.md)。
+FRP 提供通用 TOML 和自托管增强两种模式。完整的自托管部署方式见 [FRP 自托管部署](frp-self-hosting.md)。
 
-### 外部 HTTPS 接入
+### 通用 FRP TOML
 
-通过应用外部的 HTTPS 隧道或反向代理把本机 HTTP 服务转发为公网 HTTPS 时，不需要启用应用内置的“FRP 自托管隧道”。在 DMG 的“常规”页填写最终生成的“授权的外部 HTTPS 来源”，保存并重启服务，然后使用该公网地址访问。
+服务商已经生成 TOML 时，在 DMG 的“FRP”页选择“通用 TOML”，选择权限不高于 `0600` 的配置文件、对应的 `frpc` 和最终生成的 HTTPS 公网地址。应用会校验并原样执行 `frpc -c <配置文件>`，不会把 TOML 中的 token 复制到应用配置。
+
+外部 TOML 必须只包含一个 `type = "http"` 的代理，其 `localIP` 必须是 `127.0.0.1`、`::1` 或 `localhost`，`localPort` 必须与网页服务端口一致。配置不得包含 visitor，不得转发 CDP 端口 `9341` 或其他本机服务。
 
 该地址必须是完整的 HTTPS Origin，只能包含协议、域名和可选端口，不能包含路径、参数或凭据。应用会精确校验浏览器 `Origin`，自动使用 Secure Cookie，并继续只监听 `127.0.0.1`。公网地址发生变化时，需要同步更新此配置。
 
-外部接入点会终止浏览器 TLS 并把请求转发到本机，因此只能在受信任的基础设施上启用；此模式不包含自托管 FRP 网关 token 提供的额外保护。
+服务商接入点会终止浏览器 TLS 并把请求转发到本机，因此只能使用受信任的基础设施；通用 TOML 模式不包含自托管 gateway token 提供的额外保护。
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `REMOTE_CODEX_FRP_ENABLED` | `false` | 是否由本进程启动并管理 `frpc` |
-| `REMOTE_CODEX_FRP_BINARY` | `frpc` | `frpc v0.71.0` 命令或绝对路径 |
+| `REMOTE_CODEX_FRP_CONFIG_FILE` | 无 | 通用模式使用的外部 FRP TOML；必须同时配置 `REMOTE_CODEX_PUBLIC_ORIGIN` |
+| `REMOTE_CODEX_FRP_BINARY` | `frpc` | 通用模式或自托管模式使用的 `frpc` 命令或绝对路径 |
+| `REMOTE_CODEX_FRP_ENABLED` | `false` | 是否启用自托管增强模式；不能与外部 TOML 同时启用 |
 | `REMOTE_CODEX_FRP_SERVER_ADDR` | 无 | `frps` 主机名或 IP，不接受 URL |
 | `REMOTE_CODEX_FRP_SERVER_PORT` | `7000` | `frpc` 连接 `frps` 的端口 |
 | `REMOTE_CODEX_FRP_CLIENT_ID` | 无 | 设备唯一标识，只允许受限 ASCII 标识符 |
@@ -134,7 +137,7 @@ FRP 模式需要额外配置公网 `frps`、HTTPS 鉴权网关以及下列环境
 CDP 本身没有身份认证，并且拥有接近桌面应用渲染进程的控制能力。因此：
 
 - 不要把 `9341` 端口做端口转发、反向代理或公网映射。
-- 不要把网页网关或 FRP vhost 直接暴露在公网。FRP 模式必须由 HTTPS 网关覆盖并注入独立的网关密钥请求头。
+- 不要把网页服务以明文 HTTP 暴露在公网。通用 TOML 必须配置受信任的 HTTPS 公网 Origin；自托管模式还必须由网关注入独立的 gateway token。
 - 非回环明文 HTTP 默认被拒绝；只有显式设置 `REMOTE_CODEX_ALLOW_INSECURE_HTTP=true` 才能用于完全可信且隔离的局域网。非可信网络必须配置 HTTPS、可信 VPN 或受保护的 FRP 网关。
 - 服务端只接受预定义的指针、滚轮、按键、文字和少量命令。客户端不能提交任意 `Runtime.evaluate`；服务端仅使用固定表达式识别和聚焦 Codex 编辑器。
 - 当前会话存储在内存中，服务重启后全部失效；登出或会话到期会立即断开该会话的控制连接，同一时间只有一个浏览器持有控制权。

@@ -1,21 +1,32 @@
-import { execFile } from "node:child_process";
-import { mkdtemp, lstat, rm, stat, writeFile } from "node:fs/promises";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { lstat, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawn, type ChildProcess } from "node:child_process";
 import { promisify } from "node:util";
-import type { FrpConfig } from "../config.js";
+import { parse as parseToml } from "smol-toml";
+import type { ExternalFrpConfig, SelfHostedFrpConfig, TunnelConfig } from "../config.js";
 
 export const SUPPORTED_FRP_VERSION = "0.71.0";
 
-export interface FrpTunnelOptions extends FrpConfig {
+export interface FrpTunnelOptions extends SelfHostedFrpConfig {
   localPort: number;
 }
 
-export interface FrpTunnelState {
+export interface ExternalTomlTunnelOptions extends ExternalFrpConfig {
+  localPort: number;
+  protectedPorts: number[];
+}
+
+export interface TunnelState {
   phase: "stopped" | "starting" | "running" | "stopping" | "failed";
-  subdomain: string;
+  label: string;
   error?: string;
+}
+
+export interface TunnelRunner {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  getState(): TunnelState;
 }
 
 export interface FrpRuntime {
@@ -35,9 +46,7 @@ const systemRuntime: FrpRuntime = {
     await execFileAsync(binary, ["verify", "-c", configPath], { timeout: 10_000 });
   },
   spawn(binary, configPath) {
-    return spawn(binary, ["-c", configPath], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    return spawn(binary, ["-c", configPath], { stdio: ["ignore", "pipe", "pipe"] });
   },
 };
 
@@ -116,6 +125,57 @@ export async function assertPrivateFile(filePath: string, name: string): Promise
   }
 }
 
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+export function validateExternalFrpcConfig(
+  contents: string,
+  localPort: number,
+  protectedPorts: number[],
+): void {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parseToml(contents) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`External FRP TOML is invalid: ${processError(error)}`, { cause: error });
+  }
+
+  const visitors = parsed.visitors;
+  if (Array.isArray(visitors) && visitors.length > 0) {
+    throw new Error("External FRP TOML must not contain visitor definitions");
+  }
+  const includes = parsed.includes;
+  if (Array.isArray(includes) && includes.length > 0) {
+    throw new Error("External FRP TOML must not include additional configuration files");
+  }
+  if (!Array.isArray(parsed.proxies) || parsed.proxies.length !== 1) {
+    throw new Error("External FRP TOML must contain exactly one proxy");
+  }
+  const proxy = record(parsed.proxies[0]);
+  if (!proxy) throw new Error("External FRP TOML proxy must be a table");
+  if (proxy.plugin !== undefined) {
+    throw new Error("External FRP TOML proxy must not use a local plugin");
+  }
+  if (proxy.type !== "http") {
+    throw new Error("External FRP TOML proxy type must be http");
+  }
+  if (!["127.0.0.1", "::1", "localhost"].includes(String(proxy.localIP || ""))) {
+    throw new Error("External FRP TOML proxy must target a loopback address");
+  }
+  if (!Number.isInteger(proxy.localPort)) {
+    throw new Error("External FRP TOML proxy localPort must be an integer");
+  }
+  if (protectedPorts.includes(proxy.localPort as number)) {
+    throw new Error(`External FRP TOML must not expose protected local port ${proxy.localPort}`);
+  }
+  if (proxy.localPort !== localPort) {
+    throw new Error(`External FRP TOML proxy localPort must match the web service port ${localPort}`);
+  }
+}
+
 function parseVersion(output: string): string | undefined {
   return output.match(/(?:^|\s)v?(\d+\.\d+\.\d+)(?:\s|$)/)?.[1];
 }
@@ -144,50 +204,32 @@ async function waitForSpawn(child: ChildProcess): Promise<void> {
   });
 }
 
-export class FrpTunnel {
+abstract class ManagedFrpTunnel implements TunnelRunner {
   private child?: ChildProcess;
-  private tempDirectory?: string;
-  private cleanupPromise?: Promise<void>;
-  private state: FrpTunnelState;
+  private state: TunnelState;
 
-  constructor(
-    private readonly options: FrpTunnelOptions,
-    private readonly runtime: FrpRuntime = systemRuntime,
+  protected constructor(
+    private readonly label: string,
+    protected readonly binary: string,
+    protected readonly runtime: FrpRuntime,
   ) {
-    this.state = { phase: "stopped", subdomain: options.subdomain };
+    this.state = { phase: "stopped", label };
   }
 
-  getState(): FrpTunnelState {
+  getState(): TunnelState {
     return { ...this.state };
   }
 
+  protected abstract prepareConfig(): Promise<string>;
+  protected abstract cleanupConfig(): Promise<void>;
+
   async start(): Promise<void> {
     if (this.state.phase === "running" || this.state.phase === "starting") return;
-    this.state = { phase: "starting", subdomain: this.options.subdomain };
-
+    this.state = { phase: "starting", label: this.label };
     try {
-      await assertPrivateFile(this.options.tokenFile, "REMOTE_CODEX_FRP_TOKEN_FILE");
-      if (this.options.verifyServerCertificate) {
-        await assertRegularFile(this.options.trustedCaFile!, "REMOTE_CODEX_FRP_TRUSTED_CA");
-      }
-      if (this.options.clientCertFile && this.options.clientKeyFile) {
-        await assertRegularFile(this.options.clientCertFile, "REMOTE_CODEX_FRP_CLIENT_CERT");
-        await assertPrivateFile(this.options.clientKeyFile, "REMOTE_CODEX_FRP_CLIENT_KEY");
-      }
-
-      const reportedVersion = parseVersion(await this.runtime.version(this.options.binary));
-      if (reportedVersion !== SUPPORTED_FRP_VERSION) {
-        throw new Error(
-          `Unsupported frpc version ${reportedVersion || "unknown"}; expected ${SUPPORTED_FRP_VERSION}`,
-        );
-      }
-
-      this.tempDirectory = await mkdtemp(path.join(os.tmpdir(), "my-remote-codex-frp-"));
-      const configPath = path.join(this.tempDirectory, "frpc.toml");
-      await writeFile(configPath, renderFrpcConfig(this.options), { mode: 0o600, flag: "wx" });
-      await this.runtime.verify(this.options.binary, configPath);
-
-      const child = this.runtime.spawn(this.options.binary, configPath);
+      const configPath = await this.prepareConfig();
+      await this.runtime.verify(this.binary, configPath);
+      const child = this.runtime.spawn(this.binary, configPath);
       this.child = child;
       child.stdout?.on("data", (chunk: Buffer) => process.stdout.write(`[frpc] ${chunk.toString()}`));
       child.stderr?.on("data", (chunk: Buffer) => process.stderr.write(`[frpc] ${chunk.toString()}`));
@@ -195,19 +237,19 @@ export class FrpTunnel {
       child.once("exit", (code, signal) => {
         if (this.state.phase !== "stopping" && this.state.phase !== "stopped") {
           const reason = `frpc exited unexpectedly (${signal ?? code ?? "unknown"})`;
-          this.state = { phase: "failed", subdomain: this.options.subdomain, error: reason };
+          this.state = { phase: "failed", label: this.label, error: reason };
           console.error(reason);
         }
         this.child = undefined;
-        void this.removeTemporaryFiles();
+        void this.cleanupConfig();
       });
-      this.state = { phase: "running", subdomain: this.options.subdomain };
+      this.state = { phase: "running", label: this.label };
     } catch (error) {
       this.child?.kill("SIGTERM");
       this.child = undefined;
-      await this.removeTemporaryFiles();
+      await this.cleanupConfig();
       const message = processError(error);
-      this.state = { phase: "failed", subdomain: this.options.subdomain, error: message };
+      this.state = { phase: "failed", label: this.label, error: message };
       throw new Error(`FRP tunnel failed to start: ${message}`, { cause: error });
     }
   }
@@ -215,12 +257,11 @@ export class FrpTunnel {
   async stop(): Promise<void> {
     const child = this.child;
     if (!child) {
-      await this.removeTemporaryFiles();
-      this.state = { phase: "stopped", subdomain: this.options.subdomain };
+      await this.cleanupConfig();
+      this.state = { phase: "stopped", label: this.label };
       return;
     }
-
-    this.state = { phase: "stopping", subdomain: this.options.subdomain };
+    this.state = { phase: "stopping", label: this.label };
     const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
     child.kill("SIGTERM");
     const timeout = new Promise<"timeout">((resolve) => {
@@ -234,19 +275,81 @@ export class FrpTunnel {
       await Promise.race([exited, killTimeout]);
     }
     this.child = undefined;
-    await this.removeTemporaryFiles();
-    this.state = { phase: "stopped", subdomain: this.options.subdomain };
+    await this.cleanupConfig();
+    this.state = { phase: "stopped", label: this.label };
+  }
+}
+
+export class FrpTunnel extends ManagedFrpTunnel {
+  private tempDirectory?: string;
+  private cleanupPromise?: Promise<void>;
+
+  constructor(
+    private readonly options: FrpTunnelOptions,
+    runtime: FrpRuntime = systemRuntime,
+  ) {
+    super(options.subdomain, options.binary, runtime);
   }
 
-  private async removeTemporaryFiles(): Promise<void> {
+  protected async prepareConfig(): Promise<string> {
+    await assertPrivateFile(this.options.tokenFile, "REMOTE_CODEX_FRP_TOKEN_FILE");
+    if (this.options.verifyServerCertificate) {
+      await assertRegularFile(this.options.trustedCaFile!, "REMOTE_CODEX_FRP_TRUSTED_CA");
+    }
+    if (this.options.clientCertFile && this.options.clientKeyFile) {
+      await assertRegularFile(this.options.clientCertFile, "REMOTE_CODEX_FRP_CLIENT_CERT");
+      await assertPrivateFile(this.options.clientKeyFile, "REMOTE_CODEX_FRP_CLIENT_KEY");
+    }
+    const reportedVersion = parseVersion(await this.runtime.version(this.options.binary));
+    if (reportedVersion !== SUPPORTED_FRP_VERSION) {
+      throw new Error(
+        `Unsupported frpc version ${reportedVersion || "unknown"}; expected ${SUPPORTED_FRP_VERSION}`,
+      );
+    }
+    this.tempDirectory = await mkdtemp(path.join(os.tmpdir(), "my-remote-codex-frp-"));
+    const configPath = path.join(this.tempDirectory, "frpc.toml");
+    await writeFile(configPath, renderFrpcConfig(this.options), { mode: 0o600, flag: "wx" });
+    return configPath;
+  }
+
+  protected async cleanupConfig(): Promise<void> {
     if (this.cleanupPromise) return this.cleanupPromise;
     const directory = this.tempDirectory;
     this.tempDirectory = undefined;
     if (!directory) return;
     this.cleanupPromise = rm(directory, { recursive: true, force: true })
-      .finally(() => {
-        this.cleanupPromise = undefined;
-      });
+      .finally(() => { this.cleanupPromise = undefined; });
     return this.cleanupPromise;
   }
+}
+
+export class ExternalTomlFrpTunnel extends ManagedFrpTunnel {
+  constructor(
+    private readonly options: ExternalTomlTunnelOptions,
+    runtime: FrpRuntime = systemRuntime,
+  ) {
+    super(path.basename(options.configFile), options.binary, runtime);
+  }
+
+  protected async prepareConfig(): Promise<string> {
+    await assertPrivateFile(this.options.configFile, "REMOTE_CODEX_FRP_CONFIG_FILE");
+    validateExternalFrpcConfig(
+      await readFile(this.options.configFile, "utf8"),
+      this.options.localPort,
+      this.options.protectedPorts,
+    );
+    return this.options.configFile;
+  }
+
+  protected async cleanupConfig(): Promise<void> {}
+}
+
+export function createTunnelRunner(
+  config: TunnelConfig,
+  localPort: number,
+  protectedPorts: number[],
+): TunnelRunner {
+  return config.kind === "external-toml"
+    ? new ExternalTomlFrpTunnel({ ...config, localPort, protectedPorts })
+    : new FrpTunnel({ ...config, localPort });
 }

@@ -129,9 +129,9 @@ final class AppModel: ObservableObject {
             try spawnServer()
             updateSystemSleepPrevention()
             try await waitForLocalHealth()
-            try await refreshRuntimeStatus(waitForFRP: config.frpEnabled)
+            try await refreshRuntimeStatus(waitForFRP: config.hasManagedTunnel)
             servicePhase = .running
-            message = config.frpEnabled
+            message = config.hasManagedTunnel
                 ? BilingualText("本机服务与 FRP 隧道已启动", "Local service and FRP tunnel started")
                 : BilingualText("本机服务已启动", "Local service started")
         } catch {
@@ -172,7 +172,7 @@ final class AppModel: ObservableObject {
                 ? BilingualText("已连接", "Connected")
                 : BilingualText("未连接", "Disconnected")
             guard isRunning else {
-                frpStatus = config.frpEnabled
+                frpStatus = config.hasManagedTunnel
                     ? BilingualText("服务未启动", "Service not started")
                     : BilingualText("未启用", "Disabled")
                 throw LauncherError.healthCheckFailed("运行环境正常，请先启动服务再测试连接")
@@ -252,7 +252,7 @@ final class AppModel: ObservableObject {
                 self.serverProcess = nil
                 self.endSystemSleepPrevention()
                 self.servicePhase = child.terminationStatus == 0 ? .stopped : .failed
-                self.frpStatus = self.config.frpEnabled
+                self.frpStatus = self.config.hasManagedTunnel
                     ? BilingualText("已停止", "Stopped")
                     : BilingualText("未启用", "Disabled")
                 self.message = child.terminationStatus == 0
@@ -270,7 +270,7 @@ final class AppModel: ObservableObject {
 
     private func serverEnvironment() -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        let usesTunnel = config.frpEnabled || config.hasExternalPublicURL
+        let usesTunnel = config.hasManagedTunnel || config.hasExternalPublicURL
         environment["REMOTE_CODEX_HOST"] = usesTunnel ? "127.0.0.1" : (config.allowLAN ? "0.0.0.0" : "127.0.0.1")
         environment["REMOTE_CODEX_ALLOW_INSECURE_HTTP"] = config.allowLAN && !usesTunnel ? "true" : "false"
         environment["REMOTE_CODEX_PORT"] = String(config.port)
@@ -278,15 +278,21 @@ final class AppModel: ObservableObject {
         environment["REMOTE_CODEX_PAIRING_CODE"] = config.pairingCode
         environment["REMOTE_CODEX_NATIVE_CAPTURE_BINARY"] = paths.captureBinary.path
         environment["REMOTE_CODEX_VIDEO_TRANSPORT"] = "auto"
-        environment["REMOTE_CODEX_FRP_ENABLED"] = config.frpEnabled ? "true" : "false"
+        environment["REMOTE_CODEX_FRP_ENABLED"] = config.usesSelfHostedFRP ? "true" : "false"
+        environment.removeValue(forKey: "REMOTE_CODEX_FRP_CONFIG_FILE")
         if let externalPublicURL = config.externalPublicURL {
             environment["REMOTE_CODEX_PUBLIC_ORIGIN"] = externalPublicURL
         } else {
             environment.removeValue(forKey: "REMOTE_CODEX_PUBLIC_ORIGIN")
         }
-        guard config.frpEnabled else { return environment }
+        guard config.hasManagedTunnel else { return environment }
 
         environment["REMOTE_CODEX_FRP_BINARY"] = config.frpcPath.isEmpty ? paths.bundledFrpc.path : config.frpcPath
+        if config.tunnelMode == .externalToml {
+            environment["REMOTE_CODEX_FRP_CONFIG_FILE"] = config.externalFrpConfigPath
+            environment["REMOTE_CODEX_SECURE_COOKIE"] = "true"
+            return environment
+        }
         environment["REMOTE_CODEX_FRP_SERVER_ADDR"] = config.frpServerAddress
         environment["REMOTE_CODEX_FRP_SERVER_PORT"] = String(config.frpServerPort)
         environment["REMOTE_CODEX_FRP_CLIENT_ID"] = config.frpClientID
@@ -363,7 +369,7 @@ final class AppModel: ObservableObject {
             cdpStatus = state.mirror.phase == "connected"
                 ? BilingualText("已连接", "Connected")
                 : localizedPhase(state.mirror.phase)
-            frpStatus = config.frpEnabled
+            frpStatus = config.hasManagedTunnel
                 ? localizedPhase(state.tunnel.phase)
                 : BilingualText("未启用", "Disabled")
             if !waitForFRP || state.tunnel.phase == "running" { return }
@@ -380,7 +386,7 @@ final class AppModel: ObservableObject {
             "Content-Type": "application/json",
             "Origin": localURL.absoluteString,
         ]
-        if config.frpEnabled { headers["x-remote-codex-gateway-token"] = gatewayToken }
+        if config.usesSelfHostedFRP { headers["x-remote-codex-gateway-token"] = gatewayToken }
         let body = try JSONEncoder().encode(PairRequest(code: config.pairingCode))
         let (_, response) = try await request(
             localURL.appendingPathComponent("api/pair"),

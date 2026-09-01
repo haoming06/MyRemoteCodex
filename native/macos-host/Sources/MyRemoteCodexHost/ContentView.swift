@@ -75,38 +75,9 @@ struct ContentView: View {
                     }
                 }
                 Toggle(model.text("允许可信局域网设备访问", "Allow trusted devices on the local network"), isOn: $model.config.allowLAN)
-                    .disabled(model.config.frpEnabled || model.config.hasExternalPublicURL)
-                HStack(spacing: 12) {
-                    HStack(spacing: 5) {
-                        Text(model.text("授权的外部 HTTPS 来源", "Allowed external HTTPS origin"))
-                        Button {
-                            externalOriginHelpPinned.toggle()
-                        } label: {
-                            Image(systemName: "questionmark.circle")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(model.text("配置说明", "Configuration help"))
-                        .onHover { externalOriginHelpHovered = $0 }
-                        .popover(isPresented: externalOriginHelpPresented, arrowEdge: .bottom) {
-                            Text(model.text(
-                                "仅当使用独立运行的 HTTPS 隧道或反向代理访问本机服务时填写最终生成的公网地址；使用本机、局域网或应用内置 FRP 时留空。",
-                                "Enter the generated public URL only when an independently managed HTTPS tunnel or reverse proxy accesses the local service. Leave it empty for local, LAN, or built-in FRP access."
-                            ))
-                            .frame(width: 320, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(12)
-                        }
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
-                    Spacer(minLength: 8)
-                    TextField("", text: externalPublicURL, axis: .horizontal)
-                        .labelsHidden()
-                        .accessibilityLabel(model.text("授权的外部 HTTPS 来源", "Allowed external HTTPS origin"))
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(1)
-                        .frame(minWidth: 240, maxWidth: .infinity, minHeight: 24, maxHeight: 24)
-                        .layoutPriority(1)
+                    .disabled(model.config.hasManagedTunnel || model.config.hasExternalPublicURL)
+                if model.config.tunnelMode != .externalToml {
+                    externalOriginRow
                 }
                 Toggle(model.text("打开应用时自动启动服务", "Start the service when the app opens"), isOn: $model.config.startOnAppLaunch)
                 Toggle(
@@ -138,42 +109,102 @@ struct ContentView: View {
 
     private var frpSettings: some View {
         Form {
-            Section {
-                Toggle(model.text("启用 FRP 自托管隧道", "Enable the self-hosted FRP tunnel"), isOn: $model.config.frpEnabled)
-            }
-
-            Section(model.text("服务器", "Server"), content: {
-                textRow(model.text("FRP 地址", "FRP address"), text: $model.config.frpServerAddress, placeholder: "frp.example.com")
-                numberRow(model.text("端口", "Port"), value: $model.config.frpServerPort, placeholder: "7000")
-                Picker(model.text("TLS 验证", "TLS verification"), selection: verifyFRPServerCertificate) {
-                    Text(model.text("验证服务器", "Verify server")).tag(true)
-                    Text(model.text("兼容（不验证）", "Compatible (no verification)")).tag(false)
+            Section(model.text("模式", "Mode")) {
+                Picker(model.text("FRP 模式", "FRP mode"), selection: frpMode) {
+                    Text(model.text("关闭", "Off")).tag(FrpMode.disabled)
+                    Text(model.text("通用 TOML", "External TOML")).tag(FrpMode.externalToml)
+                    Text(model.text("自托管", "Self-hosted")).tag(FrpMode.selfHosted)
                 }
                 .pickerStyle(.segmented)
-                textRow(model.text("证书名称", "Certificate name"), text: $model.config.frpServerName, placeholder: "frp.example.com")
-                    .disabled(!model.config.verifiesFRPServerCertificate)
-                fileRow(model.text("CA 证书", "CA certificate"), text: $model.config.frpTrustedCAPath, title: model.text("选择 FRP CA 证书", "Select the FRP CA certificate"))
-                    .disabled(!model.config.verifiesFRPServerCertificate)
-                fileRow("frpc", text: $model.config.frpcPath, title: model.text("选择 frpc v0.71.0", "Select frpc v0.71.0"), executable: true, placeholder: model.text("留空使用安装包内置版本", "Leave empty to use the bundled version"))
-            })
-            .disabled(!model.config.frpEnabled)
+            }
 
-            Section(model.text("设备", "Device"), content: {
-                textRow(model.text("设备 ID", "Device ID"), text: $model.config.frpClientID, placeholder: "device_01")
-                textRow(model.text("用户", "User"), text: $model.config.frpUser, placeholder: "account_01")
-                textRow(model.text("子域", "Subdomain"), text: $model.config.frpSubdomain, placeholder: "device-01")
-                secureRow("FRP token", text: $model.frpToken)
-                secureRow(model.text("网关 token", "Gateway token"), text: $model.gatewayToken)
-            })
-            .disabled(!model.config.frpEnabled)
+            if model.config.tunnelMode == .externalToml {
+                Section(model.text("通用 TOML", "External TOML")) {
+                    fileRow(
+                        model.text("配置文件", "Configuration file"),
+                        text: $model.config.externalFrpConfigPath,
+                        title: model.text("选择 FRP TOML 文件", "Select an FRP TOML file"),
+                        placeholder: "nicefrp-….toml"
+                    )
+                    fileRow(
+                        "frpc",
+                        text: $model.config.frpcPath,
+                        title: model.text("选择 frpc", "Select frpc"),
+                        executable: true,
+                        placeholder: model.text("留空使用安装包内置版本", "Leave empty to use the bundled version")
+                    )
+                    externalOriginRow
+                }
+            } else if model.config.tunnelMode == .selfHosted {
+                Section(model.text("服务器", "Server"), content: {
+                    textRow(model.text("FRP 地址", "FRP address"), text: $model.config.frpServerAddress, placeholder: "frp.example.com")
+                    numberRow(model.text("端口", "Port"), value: $model.config.frpServerPort, placeholder: "7000")
+                    Picker(model.text("TLS 验证", "TLS verification"), selection: verifyFRPServerCertificate) {
+                        Text(model.text("验证服务器", "Verify server")).tag(true)
+                        Text(model.text("兼容（不验证）", "Compatible (no verification)")).tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    textRow(model.text("证书名称", "Certificate name"), text: $model.config.frpServerName, placeholder: "frp.example.com")
+                        .disabled(!model.config.verifiesFRPServerCertificate)
+                    fileRow(model.text("CA 证书", "CA certificate"), text: $model.config.frpTrustedCAPath, title: model.text("选择 FRP CA 证书", "Select the FRP CA certificate"))
+                        .disabled(!model.config.verifiesFRPServerCertificate)
+                    fileRow("frpc", text: $model.config.frpcPath, title: model.text("选择 frpc v0.71.0", "Select frpc v0.71.0"), executable: true, placeholder: model.text("留空使用安装包内置版本", "Leave empty to use the bundled version"))
+                })
 
-            Section(model.text("可选 mTLS", "Optional mTLS"), content: {
-                fileRow(model.text("客户端证书", "Client certificate"), text: $model.config.frpClientCertificatePath, title: model.text("选择 mTLS 客户端证书", "Select the mTLS client certificate"))
-                fileRow(model.text("客户端私钥", "Client private key"), text: $model.config.frpClientKeyPath, title: model.text("选择 mTLS 客户端私钥", "Select the mTLS client private key"))
-            })
-            .disabled(!model.config.frpEnabled)
+                Section(model.text("设备", "Device"), content: {
+                    textRow(model.text("设备 ID", "Device ID"), text: $model.config.frpClientID, placeholder: "device_01")
+                    textRow(model.text("用户", "User"), text: $model.config.frpUser, placeholder: "account_01")
+                    textRow(model.text("子域", "Subdomain"), text: $model.config.frpSubdomain, placeholder: "device-01")
+                    secureRow("FRP token", text: $model.frpToken)
+                    secureRow(model.text("网关 token", "Gateway token"), text: $model.gatewayToken)
+                })
+
+                Section(model.text("可选 mTLS", "Optional mTLS"), content: {
+                    fileRow(model.text("客户端证书", "Client certificate"), text: $model.config.frpClientCertificatePath, title: model.text("选择 mTLS 客户端证书", "Select the mTLS client certificate"))
+                    fileRow(model.text("客户端私钥", "Client private key"), text: $model.config.frpClientKeyPath, title: model.text("选择 mTLS 客户端私钥", "Select the mTLS client private key"))
+                })
+            }
         }
         .formStyle(.grouped)
+    }
+
+    private var externalOriginRow: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 5) {
+                Text(model.text("授权的外部 HTTPS 来源", "Allowed external HTTPS origin"))
+                Button { externalOriginHelpPinned.toggle() } label: {
+                    Image(systemName: "questionmark.circle").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.text("配置说明", "Configuration help"))
+                .onHover { externalOriginHelpHovered = $0 }
+                .popover(isPresented: externalOriginHelpPresented, arrowEdge: .bottom) {
+                    Text(model.text(
+                        "填写隧道最终生成的公网 HTTPS 地址，只包含协议、域名和可选端口。",
+                        "Enter the tunnel's final public HTTPS address with only its scheme, host, and optional port."
+                    ))
+                    .frame(width: 320, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                }
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 8)
+            TextField("", text: externalPublicURL, axis: .horizontal)
+                .labelsHidden()
+                .accessibilityLabel(model.text("授权的外部 HTTPS 来源", "Allowed external HTTPS origin"))
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1)
+                .frame(minWidth: 240, maxWidth: .infinity, minHeight: 24, maxHeight: 24)
+                .layoutPriority(1)
+        }
+    }
+
+    private var frpMode: Binding<FrpMode> {
+        Binding(
+            get: { model.config.tunnelMode },
+            set: { model.config.tunnelMode = $0 }
+        )
     }
 
     private var verifyFRPServerCertificate: Binding<Bool> {

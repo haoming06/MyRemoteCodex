@@ -127,8 +127,11 @@ describe("macOS installer", () => {
     expect(hostSources).toContain(".applicationSupportDirectory");
     expect(hostSources).toContain(".posixPermissions: 0o600");
     expect(hostSources).toContain("REMOTE_CODEX_FRP_ENABLED");
+    expect(hostSources).toContain("REMOTE_CODEX_FRP_CONFIG_FILE");
     expect(hostSources).toContain("REMOTE_CODEX_PUBLIC_ORIGIN");
     expect(hostSources).toContain("授权的外部 HTTPS 来源");
+    expect(hostSources).toContain("通用 TOML");
+    expect(hostSources).toContain("externalToml");
     expect(hostSources).toContain("questionmark.circle");
     expect(hostSources).toContain(".lineLimit(1)");
     expect(hostSources).toContain(".fixedSize(horizontal: true, vertical: false)");

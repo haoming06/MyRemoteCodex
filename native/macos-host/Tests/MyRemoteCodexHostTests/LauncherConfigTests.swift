@@ -44,6 +44,7 @@ final class LauncherConfigTests: XCTestCase {
         XCTAssertFalse(config.startOnAppLaunch)
         XCTAssertTrue(config.preventsSystemSleepWhileRunning)
         XCTAssertFalse(config.frpEnabled)
+        XCTAssertEqual(config.tunnelMode, .disabled)
         XCTAssertEqual(config.appLanguage, .simplifiedChinese)
         config.normalize()
         XCTAssertEqual(config.preventSystemSleepWhileRunning, true)
@@ -55,6 +56,7 @@ final class LauncherConfigTests: XCTestCase {
         let decodedLegacy = try JSONDecoder().decode(LauncherConfig.self, from: Data(legacy.utf8))
         XCTAssertEqual(decodedLegacy.appLanguage, .simplifiedChinese)
         XCTAssertTrue(decodedLegacy.preventsSystemSleepWhileRunning)
+        XCTAssertEqual(decodedLegacy.tunnelMode, .disabled)
         XCTAssertFalse(String(decoding: try JSONEncoder().encode(decodedLegacy), as: UTF8.self).contains("publicURL"))
 
         var config = LauncherConfig()
@@ -107,6 +109,39 @@ final class LauncherConfigTests: XCTestCase {
             gatewayToken: String(repeating: "b", count: 32),
             paths: .current()
         ))
+    }
+
+    func testLegacyFRPEnabledMigratesToSelfHostedMode() throws {
+        let legacy = "{\"pairingCode\":\"ABCDEFGH\",\"port\":4310,\"cdpPort\":9341,\"allowLAN\":false,\"startOnAppLaunch\":false,\"frpEnabled\":true,\"frpcPath\":\"\",\"frpServerAddress\":\"\",\"frpServerPort\":7000,\"frpClientID\":\"\",\"frpUser\":\"\",\"frpSubdomain\":\"\",\"frpServerName\":\"\",\"frpTrustedCAPath\":\"\",\"frpClientCertificatePath\":\"\",\"frpClientKeyPath\":\"\"}"
+        var config = try JSONDecoder().decode(LauncherConfig.self, from: Data(legacy.utf8))
+
+        XCTAssertEqual(config.tunnelMode, .selfHosted)
+        config.normalize()
+        XCTAssertEqual(config.frpMode, .selfHosted)
+        XCTAssertTrue(config.frpEnabled)
+    }
+
+    func testExternalTomlModeRequiresPrivateConfigAndPublicOrigin() throws {
+        let configURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("my-remote-codex-\(UUID().uuidString).toml")
+        defer { try? FileManager.default.removeItem(at: configURL) }
+        try Data("[[proxies]]".utf8).write(to: configURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: configURL.path)
+
+        var config = LauncherConfig()
+        config.tunnelMode = .externalToml
+        config.frpcPath = "/bin/echo"
+        config.externalFrpConfigPath = configURL.path
+        XCTAssertThrowsError(try config.validate(frpToken: "", gatewayToken: "", paths: .current()))
+
+        config.externalPublicURL = "https://device.tunnel.example"
+        XCTAssertNoThrow(try config.validate(frpToken: "", gatewayToken: "", paths: .current()))
+        let decoded = try JSONDecoder().decode(LauncherConfig.self, from: JSONEncoder().encode(config))
+        XCTAssertEqual(decoded.tunnelMode, .externalToml)
+        XCTAssertEqual(decoded.externalFrpConfigPath, configURL.path)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: configURL.path)
+        XCTAssertThrowsError(try config.validate(frpToken: "", gatewayToken: "", paths: .current()))
     }
 
     func testFRPCompatibilityModeDoesNotRequireCertificateFiles() throws {

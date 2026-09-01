@@ -28,7 +28,7 @@ describe("FRP configuration", () => {
     expect(config.videoHighFps).toBe(45);
     expect(config.webRtcIceServers).toEqual([]);
     expect(config.nativeCaptureBinary).toContain("My Remote Codex Capture.app/Contents/MacOS/remote-codex-capture");
-    expect(config.frp).toBeUndefined();
+    expect(config.tunnel).toBeUndefined();
   });
 
   it("loads and validates WebRTC ICE servers", () => {
@@ -104,7 +104,8 @@ describe("FRP configuration", () => {
   it("loads the restricted FRP settings and forces secure cookies", () => {
     const config = loadConfig(frpEnv());
     expect(config.secureCookies).toBe(true);
-    expect(config.frp).toMatchObject({
+    expect(config.tunnel).toMatchObject({
+      kind: "self-hosted",
       binary: "frpc",
       serverAddr: "frp.example.com",
       serverPort: 7000,
@@ -125,9 +126,10 @@ describe("FRP configuration", () => {
       REMOTE_CODEX_FRP_TRUSTED_CA: undefined,
       REMOTE_CODEX_FRP_SERVER_NAME: undefined,
     }));
-    expect(config.frp).toMatchObject({ verifyServerCertificate: false });
-    expect(config.frp?.trustedCaFile).toBeUndefined();
-    expect(config.frp?.serverName).toBeUndefined();
+    expect(config.tunnel).toMatchObject({ kind: "self-hosted", verifyServerCertificate: false });
+    if (config.tunnel?.kind !== "self-hosted") throw new Error("Expected self-hosted FRP config");
+    expect(config.tunnel.trustedCaFile).toBeUndefined();
+    expect(config.tunnel.serverName).toBeUndefined();
   });
 
   it("keeps server verification enabled by default", () => {
@@ -155,5 +157,27 @@ describe("FRP configuration", () => {
   it("does not allow insecure cookies through a public tunnel", () => {
     expect(() => loadConfig(frpEnv({ REMOTE_CODEX_SECURE_COOKIE: "false" })))
       .toThrow("cannot be disabled when HTTPS or FRP is enabled");
+  });
+
+  it("loads an external FRP TOML only with an HTTPS public origin", () => {
+    const config = loadConfig({
+      REMOTE_CODEX_FRP_CONFIG_FILE: "nicefrp.toml",
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.tunnel.example",
+    });
+    expect(config.tunnel).toEqual({
+      kind: "external-toml",
+      binary: "frpc",
+      configFile: path.resolve("nicefrp.toml"),
+    });
+    expect(config.secureCookies).toBe(true);
+    expect(() => loadConfig({ REMOTE_CODEX_FRP_CONFIG_FILE: "nicefrp.toml" }))
+      .toThrow("REMOTE_CODEX_PUBLIC_ORIGIN is required");
+  });
+
+  it("rejects conflicting FRP modes", () => {
+    expect(() => loadConfig(frpEnv({
+      REMOTE_CODEX_FRP_CONFIG_FILE: "nicefrp.toml",
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.tunnel.example",
+    }))).toThrow("cannot be enabled together");
   });
 });

@@ -1,7 +1,8 @@
 import path from "node:path";
 import { isIP } from "node:net";
 
-export interface FrpConfig {
+export interface SelfHostedFrpConfig {
+  kind: "self-hosted";
   binary: string;
   serverAddr: string;
   serverPort: number;
@@ -16,6 +17,14 @@ export interface FrpConfig {
   clientCertFile?: string;
   clientKeyFile?: string;
 }
+
+export interface ExternalFrpConfig {
+  kind: "external-toml";
+  binary: string;
+  configFile: string;
+}
+
+export type TunnelConfig = SelfHostedFrpConfig | ExternalFrpConfig;
 
 function integerFromEnv(
   env: NodeJS.ProcessEnv,
@@ -76,7 +85,7 @@ export interface AppConfig {
     username?: string;
     credential?: string;
   }>;
-  frp?: FrpConfig;
+  tunnel?: TunnelConfig;
 }
 
 function requiredEnv(env: NodeJS.ProcessEnv, name: string): string {
@@ -187,7 +196,7 @@ function filePath(env: NodeJS.ProcessEnv, name: string): string {
   return path.resolve(requiredEnv(env, name));
 }
 
-function loadFrpConfig(env: NodeJS.ProcessEnv, host: string): FrpConfig | undefined {
+function loadSelfHostedFrpConfig(env: NodeJS.ProcessEnv, host: string): SelfHostedFrpConfig | undefined {
   if (!booleanFromEnv(env, "REMOTE_CODEX_FRP_ENABLED", false)) return undefined;
   if (!["127.0.0.1", "::1", "localhost"].includes(host)) {
     throw new Error("REMOTE_CODEX_HOST must be a loopback address when FRP is enabled");
@@ -201,6 +210,7 @@ function loadFrpConfig(env: NodeJS.ProcessEnv, host: string): FrpConfig | undefi
   const verifyServerCertificate = booleanFromEnv(env, "REMOTE_CODEX_FRP_VERIFY_SERVER", true);
 
   return {
+    kind: "self-hosted",
     binary: commandPath(env.REMOTE_CODEX_FRP_BINARY?.trim() || "frpc"),
     serverAddr: hostname(requiredEnv(env, "REMOTE_CODEX_FRP_SERVER_ADDR"), "REMOTE_CODEX_FRP_SERVER_ADDR"),
     serverPort: integerFromEnv(env, "REMOTE_CODEX_FRP_SERVER_PORT", 7000, 1, 65535),
@@ -219,6 +229,30 @@ function loadFrpConfig(env: NodeJS.ProcessEnv, host: string): FrpConfig | undefi
   };
 }
 
+function loadTunnelConfig(
+  env: NodeJS.ProcessEnv,
+  host: string,
+  configuredPublicOrigin: string | undefined,
+): TunnelConfig | undefined {
+  const selfHosted = loadSelfHostedFrpConfig(env, host);
+  const externalConfig = env.REMOTE_CODEX_FRP_CONFIG_FILE?.trim();
+  if (selfHosted && externalConfig) {
+    throw new Error("Self-hosted FRP and an external FRP TOML file cannot be enabled together");
+  }
+  if (!externalConfig) return selfHosted;
+  if (!isLoopbackHost(host)) {
+    throw new Error("REMOTE_CODEX_HOST must be a loopback address when an external FRP TOML file is enabled");
+  }
+  if (!configuredPublicOrigin) {
+    throw new Error("REMOTE_CODEX_PUBLIC_ORIGIN is required when REMOTE_CODEX_FRP_CONFIG_FILE is set");
+  }
+  return {
+    kind: "external-toml",
+    binary: commandPath(env.REMOTE_CODEX_FRP_BINARY?.trim() || "frpc"),
+    configFile: path.resolve(externalConfig),
+  };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const tlsCertPath = env.REMOTE_CODEX_TLS_CERT
     ? path.resolve(env.REMOTE_CODEX_TLS_CERT)
@@ -232,19 +266,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   const host = env.REMOTE_CODEX_HOST || "127.0.0.1";
-  const frp = loadFrpConfig(env, host);
   const configuredPublicOrigin = publicOrigin(env);
+  const tunnel = loadTunnelConfig(env, host, configuredPublicOrigin);
   if (configuredPublicOrigin && !isLoopbackHost(host)) {
     throw new Error("REMOTE_CODEX_HOST must be a loopback address when REMOTE_CODEX_PUBLIC_ORIGIN is set");
   }
   const allowInsecureHttp = booleanFromEnv(env, "REMOTE_CODEX_ALLOW_INSECURE_HTTP", false);
-  if (!isLoopbackHost(host) && !tlsCertPath && !frp && !allowInsecureHttp) {
+  if (!isLoopbackHost(host) && !tlsCertPath && !tunnel && !allowInsecureHttp) {
     throw new Error(
       "Non-loopback HTTP is disabled; configure REMOTE_CODEX_TLS_CERT and REMOTE_CODEX_TLS_KEY, "
       + "or explicitly set REMOTE_CODEX_ALLOW_INSECURE_HTTP=true for a trusted LAN",
     );
   }
-  const securePublicAccess = Boolean(tlsCertPath || frp || configuredPublicOrigin);
+  const securePublicAccess = Boolean(tlsCertPath || tunnel || configuredPublicOrigin);
   const secureCookies = booleanFromEnv(env, "REMOTE_CODEX_SECURE_COOKIE", securePublicAccess);
   if (securePublicAccess && !secureCookies) {
     throw new Error(
@@ -287,6 +321,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     videoHighMaxWidth: integerFromEnv(env, "REMOTE_CODEX_VIDEO_HIGH_MAX_WIDTH", 2560, 640, 4096),
     videoHighBitrate: integerFromEnv(env, "REMOTE_CODEX_VIDEO_HIGH_BITRATE", 7_000_000, 500_000, 30_000_000),
     webRtcIceServers: webRtcIceServers(env),
-    frp,
+    tunnel,
   };
 }

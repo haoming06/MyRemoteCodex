@@ -9,7 +9,7 @@ import { loadConfig } from "./config.js";
 import { ControlLease } from "./control-lease.js";
 import { CdpMirror, type MirrorFrame, type MirrorState } from "./cdp/mirror.js";
 import { GatewayAccess } from "./frp/gateway-auth.js";
-import { FrpTunnel } from "./frp/tunnel.js";
+import { createTunnelRunner } from "./frp/tunnel.js";
 import { encodeFramePacket, LatestFrameBroadcaster } from "./frame-transport.js";
 import { RemoteInputScheduler } from "./input-scheduler.js";
 import { MacOSNativeCapture } from "./video/native-capture.js";
@@ -22,17 +22,18 @@ import {
 } from "./protocol.js";
 
 const config = loadConfig();
-const gatewayAccess = config.frp
-  ? await GatewayAccess.fromFile(config.frp.gatewayTokenFile)
+const selfHostedFrp = config.tunnel?.kind === "self-hosted" ? config.tunnel : undefined;
+const gatewayAccess = selfHostedFrp
+  ? await GatewayAccess.fromFile(selfHostedFrp.gatewayTokenFile)
   : undefined;
-const frpTunnel = config.frp
-  ? new FrpTunnel({ ...config.frp, localPort: config.port })
+const frpTunnel = config.tunnel
+  ? createTunnelRunner(config.tunnel, config.port, [config.cdpPort])
   : undefined;
 const auth = new PairingManager({
   code: config.pairingCode,
   sessionTtlMs: config.sessionTtlMs,
 });
-const publicProtocol = config.tlsCertPath || config.frp ? "https:" : "http:";
+const publicProtocol = config.tlsCertPath || selfHostedFrp ? "https:" : "http:";
 const usesSecurePublicAccess = publicProtocol === "https:" || config.publicOrigin !== undefined;
 const sessionSockets = new Map<string, Set<WebSocket>>();
 const mirror = new CdpMirror({
@@ -170,7 +171,7 @@ async function routeApi(request: IncomingMessage, response: ServerResponse, path
       authenticated: true,
       mirror: mirror.getState(),
       tunnel: tunnelState
-        ? { phase: tunnelState.phase, subdomain: tunnelState.subdomain }
+        ? { phase: tunnelState.phase, label: tunnelState.label }
         : { phase: "disabled" },
     });
     return true;
@@ -606,7 +607,7 @@ server.listen(config.port, config.host, async () => {
   if (frpTunnel) {
     try {
       await frpTunnel.start();
-      console.log(`FRP tunnel: running (${frpTunnel.getState().subdomain})`);
+      console.log(`FRP tunnel: running (${frpTunnel.getState().label})`);
     } catch (error) {
       console.error(error instanceof Error ? error.message : error);
       void shutdown(1);

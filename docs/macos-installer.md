@@ -38,13 +38,13 @@ TARGET_ARCH=x86_64 npm run build:macos:installer
 - 为外部 HTTPS 隧道或反向代理填写最终生成的公开地址；
 - 默认在服务运行时防止 Mac 自动休眠，避免 CDP 和屏幕采集连接中断；
 - 启动 Codex CDP 和网页服务；
-- 启用 FRP，填写服务器、设备、TLS 和 token 配置；
+- 选择通用 FRP TOML，或配置服务器、设备、TLS 和 token 的自托管模式；
 - 测试本机服务、Codex CDP、FRP 隧道及公网健康地址；
 - 查看服务端和 `frpc` 运行日志。
 
 配置保存在 `~/Library/Application Support/My Remote Codex`。配置、FRP token 和网关 token 的文件权限为 `0600`；FRP 启用后网页服务仍只监听 `127.0.0.1`。
 
-使用外部 HTTPS 接入时，保持应用内置 FRP 关闭，在“常规”页的“授权的外部 HTTPS 来源”中填写最终生成的公开地址。保存并重启服务后，应用会只接受该公网 Origin；地址变化时需要重新填写。
+使用 NiceFRP 等服务商配置时，在“FRP”页选择“通用 TOML”，选择权限不高于 `0600` 的 TOML 和最终生成的 HTTPS 公开地址。应用会管理该 `frpc` 进程并显示状态和日志，但不会复制或重写 TOML 中的 token。使用其他独立 HTTPS 反向代理时，仍可在“常规”页只填写“授权的外部 HTTPS 来源”。
 
 “服务运行时防止 Mac 自动休眠”位于“常规”页并默认开启。该设置只阻止系统因空闲而自动休眠；停止服务后会立即释放，也不会拦截用户主动睡眠、合盖、关机或电量保护行为。
 
