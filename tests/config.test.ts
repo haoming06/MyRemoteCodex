@@ -161,22 +161,22 @@ describe("FRP configuration", () => {
 
   it("loads an external FRP TOML only with an HTTPS public origin", () => {
     const config = loadConfig({
-      REMOTE_CODEX_FRP_CONFIG_FILE: "nicefrp.toml",
+      REMOTE_CODEX_FRP_CONFIG_FILE: "frpc.toml",
       REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.tunnel.example",
     });
     expect(config.tunnel).toEqual({
       kind: "external-toml",
       binary: "frpc",
-      configFile: path.resolve("nicefrp.toml"),
+      configFile: path.resolve("frpc.toml"),
     });
     expect(config.secureCookies).toBe(true);
-    expect(() => loadConfig({ REMOTE_CODEX_FRP_CONFIG_FILE: "nicefrp.toml" }))
+    expect(() => loadConfig({ REMOTE_CODEX_FRP_CONFIG_FILE: "frpc.toml" }))
       .toThrow("REMOTE_CODEX_PUBLIC_ORIGIN is required");
   });
 
   it("rejects conflicting FRP modes", () => {
     expect(() => loadConfig(frpEnv({
-      REMOTE_CODEX_FRP_CONFIG_FILE: "nicefrp.toml",
+      REMOTE_CODEX_FRP_CONFIG_FILE: "frpc.toml",
       REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.tunnel.example",
     }))).toThrow("cannot be enabled together");
   });

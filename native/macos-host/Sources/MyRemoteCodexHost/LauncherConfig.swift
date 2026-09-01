@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Security
 
@@ -130,8 +131,8 @@ struct LauncherConfig: Codable, Equatable {
             guard hasExternalPublicURL else {
                 throw LauncherError.invalidConfiguration("通用 TOML 模式必须填写外部 HTTPS 地址")
             }
-            guard privateRegularFile(atPath: externalFrpConfigPath) else {
-                throw LauncherError.invalidConfiguration("请选择权限不高于 0600 的 FRP TOML 文件")
+            guard readableOwnedRegularFile(atPath: externalFrpConfigPath) else {
+                throw LauncherError.invalidConfiguration("请选择当前用户拥有且可读取的 FRP TOML 普通文件")
             }
             return
         }
@@ -195,12 +196,13 @@ struct LauncherConfig: Codable, Equatable {
         return true
     }
 
-    private func privateRegularFile(atPath path: String) -> Bool {
-        guard !path.isEmpty,
-              let attributes = try? FileManager.default.attributesOfItem(atPath: path),
-              attributes[.type] as? FileAttributeType == .typeRegular,
-              let permissions = attributes[.posixPermissions] as? NSNumber else { return false }
-        return permissions.intValue & 0o077 == 0
+    private func readableOwnedRegularFile(atPath path: String) -> Bool {
+        guard !path.isEmpty else { return false }
+        var info = stat()
+        guard lstat(path, &info) == 0,
+              info.st_mode & S_IFMT == S_IFREG,
+              info.st_uid == getuid() else { return false }
+        return access(path, R_OK) == 0
     }
 }
 

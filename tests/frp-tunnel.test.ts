@@ -175,14 +175,14 @@ ${extra}`;
   it("runs an external TOML without pinning the provider's frpc version", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "frp-external-test-"));
     directories.push(directory);
-    const configFile = path.join(directory, "nicefrp.toml");
+    const configFile = path.join(directory, "frpc.toml");
     await writeFile(configFile, `
 [[proxies]]
 name = "remote-codex"
 type = "http"
 localIP = "127.0.0.1"
 localPort = 4310
-`, { mode: 0o600 });
+`, { mode: 0o644 });
     const child = fakeChild();
     const runtime: FrpRuntime = {
       version: vi.fn(async () => "99.0.0"),
@@ -203,7 +203,7 @@ localPort = 4310
     await tunnel.start();
     expect(runtime.version).not.toHaveBeenCalled();
     expect(runtime.verify).toHaveBeenCalledWith("frpc", configFile);
-    expect(tunnel.getState()).toEqual({ phase: "running", label: "nicefrp.toml" });
+    expect(tunnel.getState()).toEqual({ phase: "running", label: "frpc.toml" });
     await tunnel.stop();
   });
 });

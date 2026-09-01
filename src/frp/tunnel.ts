@@ -1,5 +1,6 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { lstat, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { constants, type Stats } from "node:fs";
+import { access, lstat, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -112,16 +113,22 @@ async function assertRegularFile(filePath: string, name: string): Promise<void> 
   if (!file.isFile()) throw new Error(`${name} must point to a regular file`);
 }
 
-export async function assertPrivateFile(filePath: string, name: string): Promise<void> {
+export async function assertOwnedRegularFile(filePath: string, name: string): Promise<Stats> {
   const link = await lstat(filePath);
   if (link.isSymbolicLink() || !link.isFile()) {
     throw new Error(`${name} must point directly to a regular file`);
   }
-  if ((link.mode & 0o077) !== 0) {
-    throw new Error(`${name} must not be readable or writable by group or other users`);
-  }
   if (typeof process.getuid === "function" && link.uid !== process.getuid()) {
     throw new Error(`${name} must be owned by the current user`);
+  }
+  await access(filePath, constants.R_OK);
+  return link;
+}
+
+export async function assertPrivateFile(filePath: string, name: string): Promise<void> {
+  const link = await assertOwnedRegularFile(filePath, name);
+  if ((link.mode & 0o077) !== 0) {
+    throw new Error(`${name} must not be readable or writable by group or other users`);
   }
 }
 
@@ -332,7 +339,7 @@ export class ExternalTomlFrpTunnel extends ManagedFrpTunnel {
   }
 
   protected async prepareConfig(): Promise<string> {
-    await assertPrivateFile(this.options.configFile, "REMOTE_CODEX_FRP_CONFIG_FILE");
+    await assertOwnedRegularFile(this.options.configFile, "REMOTE_CODEX_FRP_CONFIG_FILE");
     validateExternalFrpcConfig(
       await readFile(this.options.configFile, "utf8"),
       this.options.localPort,

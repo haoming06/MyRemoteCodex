@@ -121,12 +121,12 @@ final class LauncherConfigTests: XCTestCase {
         XCTAssertTrue(config.frpEnabled)
     }
 
-    func testExternalTomlModeRequiresPrivateConfigAndPublicOrigin() throws {
+    func testExternalTomlModeAcceptsReadableUserConfigAndRequiresPublicOrigin() throws {
         let configURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("my-remote-codex-\(UUID().uuidString).toml")
         defer { try? FileManager.default.removeItem(at: configURL) }
         try Data("[[proxies]]".utf8).write(to: configURL)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: configURL.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: configURL.path)
 
         var config = LauncherConfig()
         config.tunnelMode = .externalToml
@@ -140,8 +140,7 @@ final class LauncherConfigTests: XCTestCase {
         XCTAssertEqual(decoded.tunnelMode, .externalToml)
         XCTAssertEqual(decoded.externalFrpConfigPath, configURL.path)
 
-        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: configURL.path)
-        XCTAssertThrowsError(try config.validate(frpToken: "", gatewayToken: "", paths: .current()))
+        XCTAssertNoThrow(try config.validate(frpToken: "", gatewayToken: "", paths: .current()))
     }
 
     func testFRPCompatibilityModeDoesNotRequireCertificateFiles() throws {

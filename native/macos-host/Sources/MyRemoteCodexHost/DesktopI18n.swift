@@ -79,7 +79,7 @@ enum DesktopI18n {
         "请选择可读取的 FRP CA 证书": "Select a readable FRP CA certificate",
         "找不到可执行的 frpc": "Could not find an executable frpc binary",
         "通用 TOML 模式必须填写外部 HTTPS 地址": "External TOML mode requires a public HTTPS address",
-        "请选择权限不高于 0600 的 FRP TOML 文件": "Select an FRP TOML file with permissions no broader than 0600",
+        "请选择当前用户拥有且可读取的 FRP TOML 普通文件": "Select a readable regular FRP TOML file owned by the current user",
         "FRP token 和网关 token 均须为 8-512 个字符": "The FRP and gateway tokens must each contain 8-512 characters",
         "mTLS 客户端证书和私钥必须同时设置": "The mTLS client certificate and private key must be configured together",
         "mTLS 客户端证书或私钥不可读取": "The mTLS client certificate or private key is not readable",

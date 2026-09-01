@@ -124,7 +124,7 @@ struct ContentView: View {
                         model.text("配置文件", "Configuration file"),
                         text: $model.config.externalFrpConfigPath,
                         title: model.text("选择 FRP TOML 文件", "Select an FRP TOML file"),
-                        placeholder: "nicefrp-….toml"
+                        placeholder: "frpc.toml"
                     )
                     fileRow(
                         "frpc",
