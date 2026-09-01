@@ -65,13 +65,13 @@ final class LauncherConfigTests: XCTestCase {
         XCTAssertFalse(decoded.preventsSystemSleepWhileRunning)
     }
 
-    func testExternalHTTPSURLSupportsThirdPartyTunnels() throws {
+    func testExternalHTTPSURLSupportsExternalTunnels() throws {
         var config = LauncherConfig()
-        config.externalPublicURL = "  https://device.example-tunnel.com/  "
+        config.externalPublicURL = "  https://device.tunnel.example/  "
 
         config.normalize()
 
-        XCTAssertEqual(config.externalPublicURL, "https://device.example-tunnel.com/")
+        XCTAssertEqual(config.externalPublicURL, "https://device.tunnel.example/")
         XCTAssertTrue(config.hasExternalPublicURL)
         XCTAssertNoThrow(try config.validate(frpToken: "", gatewayToken: "", paths: .current()))
 

@@ -77,26 +77,26 @@ describe("FRP configuration", () => {
 
   it("accepts one explicit HTTPS origin for an external tunnel", () => {
     const config = loadConfig({
-      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.example-tunnel.com:8443/",
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.tunnel.example:8443/",
     });
-    expect(config.publicOrigin).toBe("https://device.example-tunnel.com:8443");
+    expect(config.publicOrigin).toBe("https://device.tunnel.example:8443");
     expect(config.secureCookies).toBe(true);
 
     expect(() => loadConfig({
-      REMOTE_CODEX_PUBLIC_ORIGIN: "http://device.example-tunnel.com",
+      REMOTE_CODEX_PUBLIC_ORIGIN: "http://device.tunnel.example",
     })).toThrow("must be an HTTPS origin");
     expect(() => loadConfig({
-      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.example-tunnel.com/control",
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.tunnel.example/control",
     })).toThrow("without credentials, path, query, or fragment");
   });
 
   it("keeps an external HTTPS tunnel on loopback with secure cookies", () => {
     expect(() => loadConfig({
       REMOTE_CODEX_HOST: "0.0.0.0",
-      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.example-tunnel.com",
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.tunnel.example",
     })).toThrow("must be a loopback address");
     expect(() => loadConfig({
-      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.example-tunnel.com",
+      REMOTE_CODEX_PUBLIC_ORIGIN: "https://device.tunnel.example",
       REMOTE_CODEX_SECURE_COOKIE: "false",
     })).toThrow("cannot be disabled");
   });

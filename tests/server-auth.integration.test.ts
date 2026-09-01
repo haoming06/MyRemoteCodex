@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 
 const PAIRING_CODE = "SECURE23";
-const PUBLIC_ORIGIN = "https://device.example-tunnel.com";
+const PUBLIC_ORIGIN = "https://device.tunnel.example";
 
 async function availablePort(): Promise<number> {
   const server = net.createServer();

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var model: AppModel
+    @State private var externalOriginHelpHovered = false
+    @State private var externalOriginHelpPinned = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -74,10 +76,37 @@ struct ContentView: View {
                 }
                 Toggle(model.text("允许可信局域网设备访问", "Allow trusted devices on the local network"), isOn: $model.config.allowLAN)
                     .disabled(model.config.frpEnabled || model.config.hasExternalPublicURL)
-                LabeledContent(model.text("外部 HTTPS 地址", "External HTTPS URL")) {
-                    TextField("https://device.example-tunnel.com", text: externalPublicURL)
+                HStack(spacing: 12) {
+                    HStack(spacing: 5) {
+                        Text(model.text("授权的外部 HTTPS 来源", "Allowed external HTTPS origin"))
+                        Button {
+                            externalOriginHelpPinned.toggle()
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(model.text("配置说明", "Configuration help"))
+                        .onHover { externalOriginHelpHovered = $0 }
+                        .popover(isPresented: externalOriginHelpPresented, arrowEdge: .bottom) {
+                            Text(model.text(
+                                "仅当使用独立运行的 HTTPS 隧道或反向代理访问本机服务时填写最终生成的公网地址；使用本机、局域网或应用内置 FRP 时留空。",
+                                "Enter the generated public URL only when an independently managed HTTPS tunnel or reverse proxy accesses the local service. Leave it empty for local, LAN, or built-in FRP access."
+                            ))
+                            .frame(width: 320, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(12)
+                        }
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: 8)
+                    TextField("", text: externalPublicURL, axis: .horizontal)
+                        .labelsHidden()
+                        .accessibilityLabel(model.text("授权的外部 HTTPS 来源", "Allowed external HTTPS origin"))
                         .textFieldStyle(.roundedBorder)
-                        .frame(minWidth: 320)
+                        .lineLimit(1)
+                        .frame(minWidth: 240, maxWidth: .infinity, minHeight: 24, maxHeight: 24)
+                        .layoutPriority(1)
                 }
                 Toggle(model.text("打开应用时自动启动服务", "Start the service when the app opens"), isOn: $model.config.startOnAppLaunch)
                 Toggle(
@@ -172,6 +201,18 @@ struct ContentView: View {
         Binding(
             get: { model.config.externalPublicURL ?? "" },
             set: { model.config.externalPublicURL = $0 }
+        )
+    }
+
+    private var externalOriginHelpPresented: Binding<Bool> {
+        Binding(
+            get: { externalOriginHelpHovered || externalOriginHelpPinned },
+            set: { presented in
+                if !presented {
+                    externalOriginHelpHovered = false
+                    externalOriginHelpPinned = false
+                }
+            }
         )
     }
 
