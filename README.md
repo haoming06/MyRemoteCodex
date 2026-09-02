@@ -1,6 +1,6 @@
-# My Remote Codex
+# My Remote Codex: Remote Control Codex from Any Device | 从任意设备远程控制 Codex
 
-My Remote Codex 让你通过手机或其他电脑远程查看和控制 Mac 上运行的 Codex，随时掌握任务进度并补充指令。远程设备只需打开浏览器，无需登录 OpenAI 账号，也无需安装 ChatGPT 手机应用。
+My Remote Codex lets you view and control Codex running on your Mac from a phone or another computer, so you can monitor progress and send follow-up instructions wherever you are. Just open a browser on the remote device—no OpenAI account or ChatGPT mobile app is required. My Remote Codex 让你通过手机或其他电脑远程查看和控制 Mac 上运行的 Codex，随时掌握任务进度并补充指令；远程设备只需打开浏览器，无需登录 OpenAI 账号，也无需安装 ChatGPT 手机应用。
 
 ## 核心能力
 
