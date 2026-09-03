@@ -1,38 +1,34 @@
-# My Remote Codex: Remote Control Codex from Any Device | 从任意设备远程控制 Codex
+# My Remote Codex
 
-My Remote Codex lets you view and control Codex running on your Mac from a phone or another computer, so you can monitor progress and send follow-up instructions wherever you are. Just open a browser on the remote device—no OpenAI account or ChatGPT mobile app is required. My Remote Codex 让你通过手机或其他电脑远程查看和控制 Mac 上运行的 Codex，随时掌握任务进度并补充指令；远程设备只需打开浏览器，无需登录 OpenAI 账号，也无需安装 ChatGPT 手机应用。
+**English** | [简体中文](README.zh-CN.md)
 
-## 核心能力
+View and control Codex running on your Mac from a phone or another computer. Monitor progress and send follow-up instructions from any browser—no OpenAI account or ChatGPT mobile app is required on the remote device.
 
-- 浏览器显示 Codex 的真实画面，不维护仿制页面。
-- 支持电脑和手机的鼠标、触摸、键盘、输入及任务执行中补充指令。
-- macOS 优先使用 H.264/WebRTC 低延迟画面，并自动回退 JPEG。
-- 提供配对码、会话认证、输入限速。
-- 支持可信局域网、通用 FRP TOML 内网穿透，以及基于认证与访问控制的 `FRP v0.71.0` 自托管接入。
+[Watch the demo](#demo) · [Quick Start](#quick-start)
 
-## 演示
+## Demo
 
-![My Remote Codex 演示](assets/readme/demo.gif)
+![My Remote Codex demo](assets/readme/demo.gif)
 
-## 快速开始
+## Quick Start
 
-需要 macOS，并已安装官方 Codex 桌面客户端。推荐使用 DMG；开发或从源码运行时再使用 Shell。
+My Remote Codex requires macOS and the official Codex desktop app. The DMG is recommended for most users; use the Shell setup only for development or running from source.
 
-### DMG 安装（推荐）
+### Install with DMG (recommended)
 
-1. 打开 DMG，将 `My Remote Codex.app` 拖入“应用程序”并启动。
-2. 如果 macOS 阻止首次启动，请打开“系统设置”→“隐私与安全性”，找到有关 `My Remote Codex.app` 的安全提示并点击“仍要打开”，然后在确认对话框中再次点击“仍要打开”。
-3. 开启“允许可信局域网设备访问”。
-4. 点击“启动服务”，在界面中查看访问地址和配对码。
-5. 在手机或其他电脑的浏览器中打开访问地址，输入配对码。
+1. Open the DMG, drag `My Remote Codex.app` into Applications, and launch it.
+2. If macOS blocks the first launch, open System Settings → Privacy & Security, find the notice for `My Remote Codex.app`, click Open Anyway, and confirm once more.
+3. Enable **Allow trusted devices on the local network**.
+4. Click **Start service** to see the access URL and pairing code.
+5. Open the URL in a browser on your phone or another computer, then enter the pairing code.
 
-如果已有服务商生成的 FRP TOML，在“FRP”页选择“通用 TOML”，选择配置文件并填写最终生成的 HTTPS 公开地址。
+If you already have an FRP TOML file from a service provider, open the **FRP** page, choose **External TOML**, select the configuration file, and enter the final public HTTPS URL.
 
-DMG 已内置运行环境和 `frpc`，不需要安装 Node.js，也不需要执行项目中的 Shell 脚本。
+The DMG bundles the runtime and `frpc`; you do not need to install Node.js or run any Shell scripts from this repository.
 
-### Shell 启动
+### Run from source
 
-适合开发或从源码运行，需要 Node.js 22 或更高版本。首次使用执行：
+This setup is intended for development and requires Node.js 22 or later. Run the following commands once:
 
 ```bash
 npm install
@@ -40,90 +36,44 @@ npm run build:native:macos
 npm run build
 ```
 
-正常退出 Codex 后，启动 Codex 和网页服务：
+Quit Codex normally, then start Codex and the web service:
 
 ```bash
 ./scripts/launch-codex-macos.sh
 REMOTE_CODEX_ALLOW_INSECURE_HTTP=true REMOTE_CODEX_HOST=0.0.0.0 npm start
 ```
 
-在其他设备的浏览器中打开终端显示的地址，并输入配对码。
+Open the URL shown in the terminal on another device and enter the pairing code.
 
-> 局域网明文 HTTP 只适用于完全可信且隔离的网络。CDP 必须只监听本机回环地址，禁止把 `9341` 端口暴露到局域网或公网。
+> Plain HTTP on a local network is suitable only for a fully trusted, isolated network. CDP must listen on the local loopback interface only—never expose port `9341` to a LAN or the public internet.
 
-## FRP 公网访问
+## Key Features
 
-只有跨网络访问时才需要配置 FRP。DMG 提供“通用 TOML”和“自托管”两种模式。
+- Displays the real Codex interface in the browser instead of maintaining a replica.
+- Supports mouse, touch, keyboard input, and follow-up instructions while a task is running.
+- Uses low-latency H.264/WebRTC streaming on macOS when available, with automatic JPEG fallback.
+- Protects access with pairing codes, session authentication, and input rate limiting.
+- Supports trusted local networks, provider-managed FRP TOML tunnels, and authenticated self-hosted access with `FRP v0.71.0`.
 
-### 使用服务商 TOML
+## Public Access with FRP
 
-适用于提供标准 `frpc` TOML 配置文件的服务商：
+FRP is only required when connecting across networks. The DMG supports two modes:
 
-1. 在服务商控制台创建 HTTP 隧道，本地地址填写 `127.0.0.1`，本地端口填写 `4310` 或应用中配置的网页服务端口。
-2. 下载 TOML，在应用“FRP”页选择“通用 TOML”，选择该文件和对应的 `frpc`；留空 `frpc` 路径时使用安装包内置版本。
-3. 填写服务商最终生成的完整 HTTPS 地址，保存后启动服务。
+- **External TOML:** use a standard `frpc` TOML file supplied by a tunnel provider. The proxy must target `127.0.0.1` on port `4310` (or your configured web port) and must never expose CDP port `9341`.
+- **Self-hosted:** deploy `frps v0.71.0`, TLS, systemd, and Caddy on a Linux server, then import the generated credentials in the app.
 
-应用会原样执行 `frpc -c <配置文件>`，不会复制、重写或修改文件权限。为避免误暴露本机能力，配置必须是当前用户拥有且可读取的普通文件，并且只包含一个指向当前网页服务回环端口的 HTTP 代理，不得包含 visitor 或 CDP 端口 `9341`。
+For complete provider and self-hosted setup instructions, see the [Chinese README](README.zh-CN.md#frp-公网访问) and [FRP self-hosting guide](docs/frp-self-hosting.md).
 
-### 自托管增强模式
+## Documentation
 
-#### 1. 部署 FRP 服务端
+- [User guide: usage, configuration, troubleshooting, security boundaries, and device testing (Chinese)](docs/user-guide.md)
+- [Self-hosting FRP: server, Mac, non-standard HTTPS ports, and troubleshooting (Chinese)](docs/frp-self-hosting.md)
+- [macOS installer: configuration app, DMG, signing, and notarization (Chinese)](docs/macos-installer.md)
 
-准备一台带公网 IPv4、systemd 和 Caddy 的 Linux 服务器。以下示例使用 [sslip.io](https://sslip.io/) 和公网 IP `11.22.33.44`，实际部署时替换为自己的服务器 IP：
+## About
 
-- FRP 入口：`frp.11-22-33-44.sslip.io`
-- 浏览器入口：`device-01.11-22-33-44.sslip.io`
+This project uses the Chrome DevTools Protocol to capture the real Codex interface and forward restricted input events. It is an experimental open-source tool, not an official OpenAI plugin, and may require updates when Codex changes.
 
-在服务器的项目目录执行：
+## License
 
-```bash
-sudo ./scripts/setup-frp.sh server \
-  --frp-host frp.11-22-33-44.sslip.io \
-  --base-domain 11-22-33-44.sslip.io \
-  --device device-01
-```
-
-脚本会配置 `frps v0.71.0`、TLS、systemd 和 Caddy，并生成凭据目录 `/root/my-remote-codex-device-01`。服务器需要开放 TCP `80`、`443`、`7000`。
-
-#### 2. 在 Mac 上连接
-
-根据安装方式二选一。
-
-#### 使用 DMG
-
-1. 将服务器生成的凭据目录安全地复制到 Mac。
-2. 打开应用的“FRP”页，选择“自托管”。
-3. 根据 `metadata.env` 填写服务器、端口、设备 ID、用户和子域。
-4. 选择 `frp-ca.crt`，填入 `frp-token` 和 `gateway-token` 的内容。
-5. 保持 TLS 为“验证服务器”，保存后点击“启动服务”。
-
-到此即可。DMG 会使用内置的 `frpc` 启动隧道，Mac 上不需要执行 `setup-frp.sh local`、`setup-frp.sh start` 或 `launch-codex-macos.sh`。
-
-#### 使用 Shell
-
-将服务器生成的凭据复制到 Mac，再导入并启动：
-
-```bash
-scp -r root@11.22.33.44:/root/my-remote-codex-device-01 .
-./scripts/setup-frp.sh local --bundle ./my-remote-codex-device-01
-./scripts/launch-codex-macos.sh
-./scripts/setup-frp.sh start
-```
-
-`local` 命令会安装 `frpc v0.71.0` 并生成 `.env.frp`。使用 `./scripts/setup-frp.sh status` 查看运行状态。
-
-非标准 HTTPS 端口、证书要求和排障步骤见 [FRP 自托管部署](docs/frp-self-hosting.md)。
-
-## 文档
-
-- [用户指南：操作、配置、故障排查、安全边界与实机验证](docs/user-guide.md)
-- [FRP 自托管部署：服务器、Mac、非标准 HTTPS 端口与排障](docs/frp-self-hosting.md)
-- [macOS 安装版：配置应用、DMG、签名与公证](docs/macos-installer.md)
-
-## 说明
-
-项目通过 Chrome DevTools Protocol 获取 Codex 的真实渲染画面并转发受限输入事件。这是实验性开源工具，不是 OpenAI 官方插件；Codex 更新后可能需要同步适配。
-
-## 许可证
-
-本项目采用 [MIT License](LICENSE) 开源。
+This project is available under the [MIT License](LICENSE).
